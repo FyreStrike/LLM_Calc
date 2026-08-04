@@ -1,9 +1,10 @@
-import type { CalcResult, Warning } from '../core/types';
 import { GB } from '../core/memory';
+import type { CalcResult, ModelSpec, Warning } from '../core/types';
+import { getGpu, GPUS } from '../data/gpus';
 import { useLanguage, useT } from '../i18n';
-import { useStore } from '../state/store';
-import { bytes, contextLabel, money, num, tokens, duration } from '../ui/format';
-import { Badge, Card, Stat } from '../ui/primitives';
+import { selectedModel, useStore } from '../state/store';
+import { bytes, duration, money, num, tokens } from '../ui/format';
+import { Badge, Card, Divider, Note, Stat, Swatch } from '../ui/primitives';
 
 // Fixed categorical order — never cycled, never reassigned by rank.
 const MEMORY_SERIES = [
@@ -15,261 +16,296 @@ const MEMORY_SERIES = [
 ] as const;
 
 export function Results({ result }: { result: CalcResult }) {
+  const advanced = useStore((s) => s.advanced);
+
   return (
     <div className="space-y-4">
-      <VramCard result={result} />
-      <PerformanceCard result={result} />
-      <CostCompareCard result={result} />
-      <EnergyCard result={result} />
-      <RooflineCard result={result} />
+      <Verdict result={result} />
+      <div className="grid gap-4 xl:grid-cols-2">
+        <MemoryCard result={result} />
+        <CostCard result={result} />
+      </div>
+      {advanced && (
+        <div className="grid gap-4 xl:grid-cols-2">
+          <EnergyCard result={result} />
+          <RooflineCard result={result} />
+        </div>
+      )}
       <Warnings warnings={result.warnings} />
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// VRAM
-// ---------------------------------------------------------------------------
+/* ------------------------------------------------------------------- verdict */
 
-function VramCard({ result }: { result: CalcResult }) {
+/**
+ * The headline panel. Three questions get answered before any scrolling:
+ * does it fit, how fast is it, and is it cheaper than the API.
+ */
+function Verdict({ result }: { result: CalcResult }) {
   const t = useT();
   const language = useLanguage((s) => s.language);
-  const { memory, usableVramBytes, fits, utilizationPct } = result;
+  const state = useStore();
+  const model = selectedModel(state);
+  const gpu = getGpu(state.gpuId) ?? GPUS[0];
+
+  const { memory, usableVramBytes, fits, utilizationPct, performance, cost } = result;
+  const pct = Math.min(100, utilizationPct);
+  const tone = !fits ? 'bad' : utilizationPct > 88 ? 'warn' : 'good';
+  const toneVar = { good: 'var(--good)', warn: 'var(--warn)', bad: 'var(--bad)' }[tone];
+
+  const hasApi = cost.apiPerMTokens !== undefined;
+  const localCheaper = (cost.savingsPerMTokens ?? 0) > 0;
+
+  return (
+    <section className="overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-md)]">
+      {/* Status strip carries the colour, so the cards below stay calm. */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-5 pt-4 pb-3">
+        <span
+          className="inline-flex items-center gap-2 text-[15px] font-semibold tracking-tight"
+          style={{ color: toneVar }}
+        >
+          <span
+            className="inline-block h-2 w-2 rounded-full"
+            style={{ background: toneVar }}
+          />
+          {fits ? t('results.fits') : t('results.doesNotFit')}
+        </span>
+        <span className="text-[12px] text-[var(--text-3)]">
+          {model.name} · {state.quantId.toUpperCase()} ·{' '}
+          {state.numGpus > 1 ? `${state.numGpus}× ` : ''}
+          {gpu.name}
+        </span>
+      </div>
+
+      <Divider />
+
+      <div className="grid gap-px bg-[var(--border)] sm:grid-cols-3">
+        {/* memory */}
+        <div className="bg-[var(--surface)] px-5 py-4">
+          <Stat
+            label={t('results.vramUsage')}
+            value={`${num(memory.totalBytes / GB, language, 1)} GB`}
+            sub={`${t('results.of')} ${num(usableVramBytes / GB, language, 0)} GB · ${num(
+              utilizationPct,
+              language,
+              0,
+            )} %`}
+            tone={tone}
+            size="lg"
+          />
+          <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-[var(--surface-3)]">
+            <div
+              className="h-full rounded-full transition-[width] duration-300"
+              style={{ width: `${pct}%`, background: toneVar }}
+            />
+          </div>
+        </div>
+
+        {/* speed */}
+        <div className="bg-[var(--surface)] px-5 py-4">
+          <Stat
+            label={t('results.generationSpeed')}
+            value={num(performance.decodeTokensPerSecPerSequence, language, 1)}
+            unit={t('units.tokensPerSec')}
+            // Composed from units rather than a lowercased sentence: German
+            // capitalises nouns, so `t('results.latency').toLowerCase()` would
+            // render "latenz pro token".
+            sub={`${num(performance.msPerToken, language, 1)} ms/Token · TTFT ${num(
+              performance.ttftMs,
+              language,
+              0,
+            )} ms`}
+            size="lg"
+          />
+          {state.batchSize > 1 && (
+            <div className="mt-2 text-[11px] text-[var(--text-3)]">
+              {t('results.totalThroughput')}:{' '}
+              <span className="font-semibold tabular-nums text-[var(--text-2)]">
+                {num(performance.decodeTokensPerSecTotal, language, 0)}{' '}
+                {t('units.tokensPerSec')}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* cost */}
+        <div className="bg-[var(--surface)] px-5 py-4">
+          <Stat
+            label={t('results.localCost')}
+            value={money(cost.localElectricityPerMTokens, cost.currency, language, 3)}
+            sub={t('results.perMTokens')}
+            size="lg"
+          />
+          {hasApi && (
+            <div className="mt-2 flex items-center gap-1.5 text-[11px]">
+              <Badge tone={localCheaper ? 'good' : 'warn'}>
+                {localCheaper ? '↓' : '↑'}{' '}
+                {money(Math.abs(cost.savingsPerMTokens!), cost.currency, language, 3)}
+              </Badge>
+              <span className="text-[var(--text-3)]">
+                {t('results.apiCost')}{' '}
+                {money(cost.apiPerMTokens!, cost.currency, language, 3)}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* -------------------------------------------------------------------- memory */
+
+function MemoryCard({ result }: { result: CalcResult }) {
+  const t = useT();
+  const language = useLanguage((s) => s.language);
+  const { memory, usableVramBytes } = result;
 
   const scale = Math.max(memory.totalBytes, usableVramBytes);
   const freeBytes = Math.max(0, usableVramBytes - memory.totalBytes);
 
-  const tone = !fits ? 'bad' : utilizationPct > 85 ? 'warn' : 'good';
-
   return (
-    <Card
-      title={t('results.vramUsage')}
-      right={
-        <Badge tone={fits ? 'good' : 'bad'}>
-          {fits ? t('results.fits') : t('results.doesNotFit')}
-        </Badge>
-      }
-    >
-      <div className="mb-3 flex items-baseline gap-3">
-        <Stat
-          label=""
-          value={`${num(memory.totalBytes / GB, language, 1)} GB`}
-          sub={`${t('results.of')} ${num(usableVramBytes / GB, language, 1)} GB — ${num(
-            utilizationPct,
-            language,
-            0,
-          )}%`}
-          tone={tone}
-        />
-      </div>
-
-      {/* Stacked bar. 2px surface gaps between segments; rounded data-ends. */}
+    <Card title={t('results.memoryBreakdown')}>
       <div
-        className="flex h-6 w-full gap-[2px] overflow-hidden rounded"
+        className="flex h-7 w-full gap-[2px] overflow-hidden rounded-[6px]"
         role="img"
         aria-label={t('results.memoryBreakdown')}
       >
         {MEMORY_SERIES.map((s) => {
-          const value = memory[s.key];
-          const pct = (value / scale) * 100;
-          if (pct < 0.15) return null;
+          const pct = (memory[s.key] / scale) * 100;
+          if (pct < 0.4) return null;
           return (
             <div
               key={s.key}
               style={{ width: `${pct}%`, background: s.color }}
-              className="first:rounded-l last:rounded-r"
+              className="transition-[width] duration-300"
+              title={t(s.label)}
             />
           );
         })}
         {freeBytes > 0 && (
           <div
             style={{ width: `${(freeBytes / scale) * 100}%` }}
-            className="rounded-r bg-slate-200 dark:bg-slate-700"
+            className="bg-[var(--surface-3)]"
           />
         )}
       </div>
 
-      {/* The table view — light-mode contrast on slots 3-5 requires that
-          identity never rest on color alone. */}
-      <table className="mt-3 w-full text-xs">
+      {/* Table view — light-mode contrast on slots 3-5 sits below 3:1, so
+          identity must never rest on colour alone. */}
+      <table className="mt-3 w-full text-[12px]">
         <tbody>
-          {MEMORY_SERIES.map((s) => {
-            const value = memory[s.key];
-            return (
-              <tr key={s.key}>
-                <td className="py-0.5">
-                  <span
-                    className="mr-2 inline-block h-2.5 w-2.5 rounded-sm align-middle"
-                    style={{ background: s.color }}
-                  />
-                  <span className="text-slate-600 dark:text-slate-300">{t(s.label)}</span>
-                </td>
-                <td className="py-0.5 text-right font-medium tabular-nums text-slate-800 dark:text-slate-100">
-                  {bytes(value, language)}
-                </td>
-                <td className="w-12 py-0.5 text-right tabular-nums text-slate-500 dark:text-slate-400">
-                  {num((value / memory.totalBytes) * 100, language, 1)}%
-                </td>
-              </tr>
-            );
-          })}
+          {MEMORY_SERIES.map((s) => (
+            <tr key={s.key} className="border-t border-[var(--border)] first:border-0">
+              <td className="py-1.5">
+                <Swatch color={s.color} />
+                <span className="text-[var(--text-2)]">{t(s.label)}</span>
+              </td>
+              <td className="py-1.5 text-right font-semibold tabular-nums text-[var(--text)]">
+                {bytes(memory[s.key], language)}
+              </td>
+              <td className="w-14 py-1.5 text-right tabular-nums text-[var(--text-3)]">
+                {num((memory[s.key] / memory.totalBytes) * 100, language, 1)} %
+              </td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </Card>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Performance
-// ---------------------------------------------------------------------------
+/* ---------------------------------------------------------------------- cost */
 
-function PerformanceCard({ result }: { result: CalcResult }) {
-  const t = useT();
-  const language = useLanguage((s) => s.language);
-  const batchSize = useStore((s) => s.batchSize);
-  const p = result.performance;
-
-  return (
-    <Card title={t('results.performance')}>
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <Stat
-          label={t('results.generationSpeed')}
-          value={num(p.decodeTokensPerSecPerSequence, language, 1)}
-          unit={t('units.tokensPerSec')}
-          sub={t('results.perUser')}
-        />
-        {batchSize > 1 && (
-          <Stat
-            label={t('results.totalThroughput')}
-            value={num(p.decodeTokensPerSecTotal, language, 0)}
-            unit={t('units.tokensPerSec')}
-          />
-        )}
-        <Stat
-          label={t('results.ttft')}
-          value={num(p.ttftMs, language, p.ttftMs < 100 ? 1 : 0)}
-          unit={t('units.ms')}
-        />
-        <Stat
-          label={t('results.latency')}
-          value={num(p.msPerToken, language, 1)}
-          unit={t('units.ms')}
-        />
-      </div>
-
-      {p.offloadFraction > 0 && (
-        <p className="mt-3 text-xs text-amber-700 dark:text-amber-400">
-          {t('warn.offloading', { percent: num(p.offloadFraction * 100, language, 0) })}
-        </p>
-      )}
-    </Card>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Cost comparison — the headline feature
-// ---------------------------------------------------------------------------
-
-function CostCompareCard({ result }: { result: CalcResult }) {
+function CostCard({ result }: { result: CalcResult }) {
   const t = useT();
   const language = useLanguage((s) => s.language);
   const dailyTokens = useStore((s) => s.dailyTokens);
   const { cost, energy } = result;
-  const currency = cost.currency;
 
   const hasApi = cost.apiPerMTokens !== undefined;
   const localCheaper = (cost.savingsPerMTokens ?? 0) > 0;
   const max = Math.max(cost.localElectricityPerMTokens, cost.apiPerMTokens ?? 0, 1e-9);
-
   const dailyCost = (cost.localElectricityPerMTokens * dailyTokens) / 1e6;
 
   return (
     <Card title={t('results.energyAndCost')}>
-      <div className="space-y-3">
-        {/* Two bars, categorical slots 1 and 2, each directly labelled. */}
-        <div className="space-y-2">
+      <div className="space-y-2.5">
+        <CostBar
+          label={t('results.localCost')}
+          value={cost.localElectricityPerMTokens}
+          max={max}
+          color="var(--series-1)"
+          currency={cost.currency}
+          language={language}
+        />
+        {hasApi && (
           <CostBar
-            label={t('results.localCost')}
-            value={cost.localElectricityPerMTokens}
+            label={t('results.apiCost')}
+            value={cost.apiPerMTokens!}
             max={max}
-            color="var(--series-1)"
-            currency={currency}
+            color="var(--series-2)"
+            currency={cost.currency}
             language={language}
           />
-          {hasApi && (
-            <CostBar
-              label={t('results.apiCost')}
-              value={cost.apiPerMTokens!}
-              max={max}
-              color="var(--series-2)"
-              currency={currency}
-              language={language}
-            />
-          )}
-        </div>
-
-        {hasApi && (
-          <p
-            className={`rounded-lg p-2 text-sm font-medium ${
-              localCheaper
-                ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300'
-                : 'bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300'
-            }`}
-          >
-            {t(localCheaper ? 'results.cheaperLocal' : 'results.cheaperApi', {
-              amount: money(Math.abs(cost.savingsPerMTokens!), currency, language, 3),
-            })}
-          </p>
-        )}
-
-        <div className="grid grid-cols-2 gap-4 border-t border-slate-200 pt-3 sm:grid-cols-4 dark:border-slate-700">
-          <Stat
-            label={t('energy.powerDraw')}
-            value={num(energy.wallPowerW, language, 0)}
-            unit={t('units.watt')}
-          />
-          <Stat
-            label={t('energy.joulesPerToken')}
-            value={num(energy.wallJoulesPerToken, language, 3)}
-            unit={t('units.joulePerToken')}
-          />
-          <Stat
-            label={t('results.perDay')}
-            value={money(dailyCost, currency, language, 2)}
-            sub={`${tokens(dailyTokens, language)} tok`}
-          />
-          <Stat
-            label={t('results.co2PerMTokens')}
-            value={num(cost.co2GramsPerMTokens, language, 1)}
-            unit={t('units.gramCo2')}
-          />
-        </div>
-
-        {cost.breakEvenTokens !== undefined ? (
-          <div className="rounded-lg bg-slate-50 p-2 text-xs dark:bg-slate-800/60">
-            <span className="font-medium text-slate-700 dark:text-slate-200">
-              {t('results.breakEven')}:{' '}
-            </span>
-            <span className="text-slate-600 dark:text-slate-300">
-              {t('results.breakEvenAfter', {
-                tokens: tokens(cost.breakEvenTokens, language),
-              })}
-              {cost.breakEvenDays !== undefined &&
-                ` — ${t('results.breakEvenDays', {
-                  days: duration(cost.breakEvenDays, language),
-                  daily: tokens(dailyTokens, language),
-                })}`}
-            </span>
-          </div>
-        ) : (
-          hasApi &&
-          !localCheaper && (
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              {t('results.breakEvenNever')}
-            </p>
-          )
         )}
       </div>
+
+      {hasApi && (
+        <div className="mt-3">
+          <Note tone={localCheaper ? 'info' : 'warn'}>
+            {t(localCheaper ? 'results.cheaperLocal' : 'results.cheaperApi', {
+              amount: money(Math.abs(cost.savingsPerMTokens!), cost.currency, language, 3),
+            })}
+          </Note>
+        </div>
+      )}
+
+      <div className="mt-4 grid grid-cols-2 gap-4 border-t border-[var(--border)] pt-3.5 sm:grid-cols-4">
+        <Stat
+          label={t('energy.powerDraw')}
+          value={num(energy.wallPowerW, language, 0)}
+          unit={t('units.watt')}
+        />
+        <Stat
+          label={t('energy.joulesPerToken')}
+          value={num(energy.wallJoulesPerToken, language, 2)}
+          unit="J"
+        />
+        <Stat
+          label={t('results.perDay')}
+          value={money(dailyCost, cost.currency, language, 2)}
+          sub={`${tokens(dailyTokens, language)} tok`}
+        />
+        <Stat
+          label={t('results.co2')}
+          value={num(cost.co2GramsPerMTokens, language, 0)}
+          unit="g"
+          sub={t('results.perMTokens')}
+        />
+      </div>
+
+      {cost.breakEvenTokens !== undefined ? (
+        <div className="mt-3 rounded-[var(--radius-sm)] bg-[var(--surface-2)] px-2.5 py-2 text-[11px] leading-relaxed">
+          <span className="font-semibold text-[var(--text-2)]">
+            {t('results.breakEven')}:{' '}
+          </span>
+          <span className="text-[var(--text-3)]">
+            {t('results.breakEvenAfter', { tokens: tokens(cost.breakEvenTokens, language) })}
+            {cost.breakEvenDays !== undefined &&
+              ` — ${t('results.breakEvenDays', {
+                days: duration(cost.breakEvenDays, language),
+                daily: tokens(dailyTokens, language),
+              })}`}
+          </span>
+        </div>
+      ) : (
+        hasApi &&
+        !localCheaper && (
+          <p className="mt-3 text-[11px] text-[var(--text-3)]">{t('results.breakEvenNever')}</p>
+        )
+      )}
     </Card>
   );
 }
@@ -292,93 +328,89 @@ function CostBar({
   const t = useT();
   return (
     <div>
-      <div className="mb-0.5 flex items-baseline justify-between text-xs">
-        <span className="text-slate-600 dark:text-slate-300">{label}</span>
-        <span className="font-semibold tabular-nums text-slate-900 dark:text-slate-50">
-          {money(value, currency, language, 3)}{' '}
-          <span className="font-normal text-slate-500">{t('results.perMTokens')}</span>
+      <div className="mb-1 flex items-baseline justify-between gap-2 text-[12px]">
+        <span className="flex items-center text-[var(--text-2)]">
+          <Swatch color={color} />
+          {label}
+        </span>
+        <span className="font-semibold tabular-nums text-[var(--text)]">
+          {money(value, currency, language, 3)}
+          <span className="ml-1 font-normal text-[var(--text-3)]">
+            {t('results.perMTokens')}
+          </span>
         </span>
       </div>
-      <div className="h-3 w-full overflow-hidden rounded bg-slate-100 dark:bg-slate-800">
+      <div className="h-2.5 w-full overflow-hidden rounded-full bg-[var(--surface-3)]">
         <div
-          className="h-full rounded"
-          style={{ width: `${Math.max(1, (value / max) * 100)}%`, background: color }}
+          className="h-full rounded-full transition-[width] duration-300"
+          style={{ width: `${Math.max(1.5, (value / max) * 100)}%`, background: color }}
         />
       </div>
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Energy detail
-// ---------------------------------------------------------------------------
+/* -------------------------------------------------------------------- energy */
 
 function EnergyCard({ result }: { result: CalcResult }) {
   const t = useT();
   const language = useLanguage((s) => s.language);
-  const advanced = useStore((s) => s.advanced);
   const { energy } = result;
-
-  if (!advanced) return null;
-
   const d = energy.decomposition;
   const totalJ = d ? d.computeJoules + d.memoryJoules + d.staticJoules : 0;
 
+  const parts = d
+    ? [
+        { j: d.computeJoules, color: 'var(--series-1)', label: t('energy.compute') },
+        { j: d.memoryJoules, color: 'var(--series-2)', label: t('energy.memory') },
+        { j: d.staticJoules, color: 'var(--series-3)', label: t('energy.static') },
+      ]
+    : [];
+
   return (
     <Card title={t('section.energy')}>
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-3 gap-4">
         <Stat
-          label={`${t('energy.powerDraw')} (${t('results.decode')})`}
+          label={t('results.decode')}
           value={num(energy.decodePowerW, language, 0)}
-          unit={t('units.watt')}
+          unit="W"
         />
         <Stat
-          label={`${t('energy.powerDraw')} (${t('results.prefill')})`}
+          label={t('results.prefill')}
           value={num(energy.prefillPowerW, language, 0)}
-          unit={t('units.watt')}
+          unit="W"
         />
         <Stat
           label={t('energy.wallPower')}
           value={num(energy.wallPowerW, language, 0)}
-          unit={t('units.watt')}
+          unit="W"
         />
       </div>
 
       {d && totalJ > 0 && (
-        <div className="mt-4">
-          <h3 className="mb-2 text-xs font-medium text-slate-600 dark:text-slate-300">
-            {t('energy.decomposition')} — E = ε_flop·W + ε_mop·Q + π₀·T
+        <div className="mt-4 border-t border-[var(--border)] pt-3.5">
+          <h3 className="mb-2 font-mono text-[11px] text-[var(--text-3)]">
+            E = ε_flop·W + ε_mop·Q + π₀·T
           </h3>
-          <div className="flex h-5 w-full gap-[2px] overflow-hidden rounded">
-            {[
-              { j: d.computeJoules, color: 'var(--series-1)', label: t('energy.compute') },
-              { j: d.memoryJoules, color: 'var(--series-2)', label: t('energy.memory') },
-              { j: d.staticJoules, color: 'var(--series-3)', label: t('energy.static') },
-            ].map((x) => (
+          <div className="flex h-6 w-full gap-[2px] overflow-hidden rounded-[6px]">
+            {parts.map((x) => (
               <div
                 key={x.label}
                 style={{ width: `${(x.j / totalJ) * 100}%`, background: x.color }}
-                className="first:rounded-l last:rounded-r"
+                title={x.label}
               />
             ))}
           </div>
-          <table className="mt-2 w-full text-xs">
+          <table className="mt-2 w-full text-[12px]">
             <tbody>
-              {[
-                { j: d.computeJoules, color: 'var(--series-1)', label: t('energy.compute') },
-                { j: d.memoryJoules, color: 'var(--series-2)', label: t('energy.memory') },
-                { j: d.staticJoules, color: 'var(--series-3)', label: t('energy.static') },
-              ].map((x) => (
+              {parts.map((x) => (
                 <tr key={x.label}>
-                  <td className="py-0.5">
-                    <span
-                      className="mr-2 inline-block h-2.5 w-2.5 rounded-sm align-middle"
-                      style={{ background: x.color }}
-                    />
-                    <span className="text-slate-600 dark:text-slate-300">{x.label}</span>
+                  <td className="py-1">
+                    <Swatch color={x.color} />
+                    <span className="text-[var(--text-2)]">{x.label}</span>
                   </td>
-                  <td className="py-0.5 text-right tabular-nums text-slate-500 dark:text-slate-400">
-                    {num((x.j / totalJ) * 100, language, 1)}%
+                  <td className="py-1 text-right font-semibold tabular-nums text-[var(--text)]">
+                    {num((x.j / totalJ) * 100, language, 1)} %
                   </td>
                 </tr>
               ))}
@@ -390,89 +422,75 @@ function EnergyCard({ result }: { result: CalcResult }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Roofline
-// ---------------------------------------------------------------------------
+/* ------------------------------------------------------------------ roofline */
 
 function RooflineCard({ result }: { result: CalcResult }) {
   const t = useT();
   const language = useLanguage((s) => s.language);
-  const advanced = useStore((s) => s.advanced);
   const p = result.performance;
 
-  if (!advanced) return null;
+  const rows: { label: string; color?: string; intensity: string; bound?: 'memory' | 'compute' }[] =
+    [
+      {
+        label: t('results.prefill'),
+        color: 'var(--series-1)',
+        intensity: num(p.prefillIntensity, language, 0),
+        bound: p.prefillBound,
+      },
+      {
+        label: t('results.decode'),
+        color: 'var(--series-2)',
+        intensity: num(p.decodeIntensity, language, 2),
+        bound: p.decodeBound,
+      },
+    ];
 
   return (
     <Card title={t('results.roofline')}>
       <RooflinePlot result={result} />
 
-      <table className="mt-3 w-full text-xs">
-        <thead>
-          <tr className="text-slate-500 dark:text-slate-400">
-            <th className="text-left font-medium"> </th>
-            <th className="text-right font-medium">{t('results.arithmeticIntensity')}</th>
-            <th className="text-right font-medium">{t('results.performance')}</th>
-          </tr>
-        </thead>
-        <tbody className="tabular-nums">
-          <tr>
-            <td className="py-0.5">
-              <span
-                className="mr-2 inline-block h-2.5 w-2.5 rounded-sm align-middle"
-                style={{ background: 'var(--series-1)' }}
-              />
-              {t('results.prefill')}
+      <table className="mt-2 w-full text-[12px]">
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.label} className="border-t border-[var(--border)] first:border-0">
+              <td className="py-1.5">
+                {r.color && <Swatch color={r.color} />}
+                <span className="text-[var(--text-2)]">{r.label}</span>
+              </td>
+              <td className="py-1.5 text-right font-semibold tabular-nums text-[var(--text)]">
+                {r.intensity}
+              </td>
+              <td className="py-1.5 pl-2 text-right">
+                <Badge tone={r.bound === 'compute' ? 'info' : 'warn'}>
+                  {t(r.bound === 'compute' ? 'results.computeBound' : 'results.memoryBound')}
+                </Badge>
+              </td>
+            </tr>
+          ))}
+          <tr className="border-t border-[var(--border)]">
+            <td className="py-1.5 text-[var(--text-3)]">{t('results.ridgePoint')} (F/B)</td>
+            <td className="py-1.5 text-right tabular-nums text-[var(--text-2)]">
+              {num(p.ridgePoint, language, 0)}
             </td>
-            <td className="text-right">
-              {num(p.prefillIntensity, language, 0)} {t('units.flopPerByte')}
+            <td className="py-1.5 pl-2 text-right text-[11px] text-[var(--text-3)]">
+              {t('units.flopPerByte')}
             </td>
-            <td className="text-right">
-              <Badge tone={p.prefillBound === 'compute' ? 'info' : 'warn'}>
-                {t(p.prefillBound === 'compute' ? 'results.computeBound' : 'results.memoryBound')}
-              </Badge>
-            </td>
-          </tr>
-          <tr>
-            <td className="py-0.5">
-              <span
-                className="mr-2 inline-block h-2.5 w-2.5 rounded-sm align-middle"
-                style={{ background: 'var(--series-2)' }}
-              />
-              {t('results.decode')}
-            </td>
-            <td className="text-right">
-              {num(p.decodeIntensity, language, 2)} {t('units.flopPerByte')}
-            </td>
-            <td className="text-right">
-              <Badge tone={p.decodeBound === 'compute' ? 'info' : 'warn'}>
-                {t(p.decodeBound === 'compute' ? 'results.computeBound' : 'results.memoryBound')}
-              </Badge>
-            </td>
-          </tr>
-          <tr className="border-t border-slate-200 dark:border-slate-700">
-            <td className="py-0.5 text-slate-500 dark:text-slate-400">
-              {t('results.ridgePoint')} (F/B)
-            </td>
-            <td className="text-right">
-              {num(p.ridgePoint, language, 0)} {t('units.flopPerByte')}
-            </td>
-            <td />
           </tr>
           <tr>
-            <td className="py-0.5 text-slate-500 dark:text-slate-400">
-              {t('results.effectiveBandwidth')}
+            <td className="py-1.5 text-[var(--text-3)]">{t('results.effectiveBandwidth')}</td>
+            <td className="py-1.5 text-right tabular-nums text-[var(--text-2)]">
+              {num(p.effectiveBandwidthBytesPerSec / 1e9, language, 0)}
             </td>
-            <td className="text-right">
-              {num(p.effectiveBandwidthBytesPerSec / 1e9, language, 0)} GB/s
-            </td>
-            <td />
+            <td className="py-1.5 pl-2 text-right text-[11px] text-[var(--text-3)]">GB/s</td>
           </tr>
           <tr>
-            <td className="py-0.5 text-slate-500 dark:text-slate-400">
-              {t('results.bytesPerToken')}
+            <td className="py-1.5 text-[var(--text-3)]">{t('results.bytesPerToken')}</td>
+            <td
+              className="py-1.5 text-right tabular-nums text-[var(--text-2)]"
+              colSpan={2}
+            >
+              {bytes(p.bytesPerDecodeStep, language)}
             </td>
-            <td className="text-right">{bytes(p.bytesPerDecodeStep, language)}</td>
-            <td />
           </tr>
         </tbody>
       </table>
@@ -481,18 +499,17 @@ function RooflineCard({ result }: { result: CalcResult }) {
 }
 
 /**
- * Log-log roofline: a bandwidth-limited diagonal that meets a compute ceiling
- * at the ridge point, with the two inference phases plotted on it. Drawn as
- * raw SVG because the axes are logarithmic in both dimensions and the two
- * roof segments must meet exactly at F/B.
+ * Log-log roofline: a bandwidth-limited diagonal meeting a compute ceiling at
+ * the ridge point, with both inference phases plotted on it. Raw SVG because
+ * both axes are logarithmic and the roof segments must meet exactly at F/B.
  */
 function RooflinePlot({ result }: { result: CalcResult }) {
   const t = useT();
   const p = result.performance;
 
   const W = 520;
-  const H = 220;
-  const PAD = { l: 46, r: 12, t: 12, b: 28 };
+  const H = 190;
+  const PAD = { l: 34, r: 12, t: 14, b: 26 };
 
   const peakFlops = p.effectiveFlops;
   const bw = p.effectiveBandwidthBytesPerSec;
@@ -517,45 +534,38 @@ function RooflinePlot({ result }: { result: CalcResult }) {
   const attain = (i: number) => Math.min(peakFlops, bw * i);
   const ridge = p.ridgePoint;
 
-  const decodePoint = { x: p.decodeIntensity, y: attain(p.decodeIntensity) };
-  const prefillPoint = { x: p.prefillIntensity, y: attain(p.prefillIntensity) };
+  const decades: number[] = [];
+  for (let e = Math.ceil(Math.log10(xMin)); e <= Math.log10(xMax); e++) decades.push(10 ** e);
 
-  const decades = [];
-  for (let e = Math.ceil(Math.log10(xMin)); e <= Math.log10(xMax); e++) {
-    decades.push(10 ** e);
-  }
+  const points = [
+    { pt: { x: p.prefillIntensity, y: attain(p.prefillIntensity) }, color: 'var(--series-1)', label: t('results.prefill') },
+    { pt: { x: p.decodeIntensity, y: attain(p.decodeIntensity) }, color: 'var(--series-2)', label: t('results.decode') },
+  ];
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label={t('results.roofline')}>
       {decades.map((d) => (
-        <line
-          key={d}
-          x1={lx(d)}
-          x2={lx(d)}
-          y1={PAD.t}
-          y2={H - PAD.b}
-          stroke="var(--grid)"
-          strokeWidth={1}
-        />
+        <line key={d} x1={lx(d)} x2={lx(d)} y1={PAD.t} y2={H - PAD.b} stroke="var(--grid)" strokeWidth={1} />
       ))}
-      <line
-        x1={PAD.l}
-        x2={W - PAD.r}
-        y1={H - PAD.b}
-        y2={H - PAD.b}
-        stroke="var(--axis)"
-        strokeWidth={1}
+      <line x1={PAD.l} x2={W - PAD.r} y1={H - PAD.b} y2={H - PAD.b} stroke="var(--axis)" strokeWidth={1} />
+
+      {/* Shade the bandwidth-bound region so the two regimes read at a glance. */}
+      <rect
+        x={PAD.l}
+        y={PAD.t}
+        width={Math.max(0, lx(ridge) - PAD.l)}
+        height={H - PAD.b - PAD.t}
+        fill="var(--accent)"
+        opacity={0.04}
       />
 
-      {/* The roof: bandwidth-limited diagonal, then the compute ceiling. */}
       <polyline
         points={`${lx(xMin)},${ly(bw * xMin)} ${lx(ridge)},${ly(peakFlops)} ${lx(xMax)},${ly(peakFlops)}`}
         fill="none"
-        stroke="var(--muted)"
+        stroke="var(--text-3)"
         strokeWidth={2}
+        strokeLinejoin="round"
       />
-
-      {/* Ridge point marker */}
       <line
         x1={lx(ridge)}
         x2={lx(ridge)}
@@ -563,35 +573,24 @@ function RooflinePlot({ result }: { result: CalcResult }) {
         y2={H - PAD.b}
         stroke="var(--axis)"
         strokeWidth={1}
-        strokeDasharray="3 3"
+        strokeDasharray="3 4"
       />
 
-      {[
-        { pt: prefillPoint, color: 'var(--series-1)', label: t('results.prefill') },
-        { pt: decodePoint, color: 'var(--series-2)', label: t('results.decode') },
-      ].map((s) => {
+      {points.map((s) => {
         const cx = lx(s.pt.x);
         const cy = ly(s.pt.y);
-        // Flip the label below the marker when it would collide with the top
-        // edge, and pull it inboard near the right edge.
         const above = cy - 10 > PAD.t + 8;
-        const anchor = cx > W - PAD.r - 30 ? 'end' : cx < PAD.l + 30 ? 'start' : 'middle';
+        const anchor = cx > W - PAD.r - 34 ? 'end' : cx < PAD.l + 34 ? 'start' : 'middle';
         return (
           <g key={s.label}>
-            <circle
-              cx={cx}
-              cy={cy}
-              r={5}
-              fill={s.color}
-              stroke="var(--surface-ring, #fcfcfb)"
-              strokeWidth={2}
-            />
+            <circle cx={cx} cy={cy} r={5} fill={s.color} stroke="var(--surface-ring)" strokeWidth={2} />
             <text
               x={cx}
-              y={above ? cy - 10 : cy + 18}
+              y={above ? cy - 11 : cy + 18}
               textAnchor={anchor}
               fontSize={10}
-              fill="currentColor"
+              fontWeight={600}
+              fill="var(--text-2)"
             >
               {s.label}
             </text>
@@ -600,55 +599,41 @@ function RooflinePlot({ result }: { result: CalcResult }) {
       })}
 
       {decades.map((d) => (
-        <text
-          key={`t${d}`}
-          x={lx(d)}
-          y={H - PAD.b + 12}
-          textAnchor="middle"
-          fontSize={9}
-          fill="var(--muted)"
-        >
+        <text key={`t${d}`} x={lx(d)} y={H - PAD.b + 13} textAnchor="middle" fontSize={9} fill="var(--muted)">
           {d >= 1 ? d.toLocaleString('en-US', { notation: 'compact' }) : d}
         </text>
       ))}
-      <text x={PAD.l} y={H - 4} fontSize={9} fill="var(--muted)">
+      <text x={W - PAD.r} y={H - 3} textAnchor="end" fontSize={9} fill="var(--muted)">
         {t('units.flopPerByte')}
       </text>
-      <text
-        x={4}
-        y={PAD.t + 8}
-        fontSize={9}
-        fill="var(--muted)"
-      >
+      <text x={2} y={PAD.t - 4} fontSize={9} fill="var(--muted)">
         FLOP/s
       </text>
     </svg>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Warnings
-// ---------------------------------------------------------------------------
+/* ------------------------------------------------------------------ warnings */
 
 function Warnings({ warnings }: { warnings: Warning[] }) {
   const t = useT();
   if (warnings.length === 0) return null;
 
-  const tone = {
-    error: 'bg-rose-50 text-rose-900 dark:bg-rose-950/40 dark:text-rose-200',
-    warn: 'bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200',
-    info: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
-  };
+  const order = { error: 0, warn: 1, info: 2 };
+  const sorted = [...warnings].sort((a, b) => order[a.level] - order[b.level]);
 
   return (
     <div className="space-y-1.5">
-      {warnings.map((w, i) => (
-        <p key={`${w.key}-${i}`} className={`rounded-lg p-2 text-xs leading-snug ${tone[w.level]}`}>
+      {sorted.map((w, i) => (
+        <Note
+          key={`${w.key}-${i}`}
+          tone={w.level === 'error' ? 'bad' : w.level === 'warn' ? 'warn' : 'neutral'}
+        >
           {t(w.key, w.values)}
-        </p>
+        </Note>
       ))}
     </div>
   );
 }
 
-export { contextLabel };
+export type { ModelSpec };

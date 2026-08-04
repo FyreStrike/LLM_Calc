@@ -42,14 +42,22 @@ export default function App() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6">
-      <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-50">{t('app.title')}</h1>
-          <p className="text-sm text-slate-600 dark:text-slate-400">{t('app.subtitle')}</p>
-        </div>
+    <div className="min-h-screen">
+      <header className="sticky top-0 z-20 border-b border-[var(--border)] bg-[var(--surface)]/85 backdrop-blur-md">
+        <div className="mx-auto flex max-w-[1500px] flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3">
+          <div className="mr-auto min-w-0">
+            <h1 className="truncate text-[15px] font-semibold tracking-tight text-[var(--text)]">
+              {t('app.title')}
+            </h1>
+            <p className="truncate text-[12px] text-[var(--text-3)]">{t('app.subtitle')}</p>
+          </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+          <Toggle
+            checked={state.advanced}
+            onChange={(v) => state.set('advanced', v)}
+            label={t('app.advanced')}
+          />
+
           <SegmentedControl<Language>
             value={language}
             onChange={setLanguage}
@@ -58,47 +66,50 @@ export default function App() {
               { value: 'en', label: 'EN' },
             ]}
           />
-          <Button onClick={share}>{copied ? t('app.shareCopied') : t('app.share')}</Button>
-          <Button onClick={() => state.reset()}>{t('app.reset')}</Button>
+
+          <Button variant={copied ? 'primary' : 'secondary'} onClick={share}>
+            {copied ? t('app.shareCopied') : t('app.share')}
+          </Button>
+          <Button variant="ghost" onClick={() => state.reset()}>
+            {t('app.reset')}
+          </Button>
         </div>
       </header>
 
-      <div className="mb-4">
-        <Toggle
-          checked={state.advanced}
-          onChange={(v) => state.set('advanced', v)}
-          label={t('app.advanced')}
-          help={t('app.advancedHint')}
-        />
-      </div>
+      <main className="mx-auto max-w-[1500px] px-5 py-5">
+        <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)]">
+          {/* Inputs stay in view while the results update beside them. */}
+          <div className="space-y-4 lg:sticky lg:top-[72px] lg:max-h-[calc(100vh-92px)] lg:overflow-y-auto lg:pr-1 lg:pb-4">
+            <ModelPanel />
+            <HardwarePanel />
+            <WorkloadPanel />
+            <EnergyCostPanel />
+          </div>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
-        <div className="space-y-4">
-          <ModelPanel />
-          <HardwarePanel />
-          <WorkloadPanel />
-          <EnergyCostPanel />
+          <div>
+            {result ? (
+              <Results result={result} />
+            ) : (
+              <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bad-soft)] p-4 text-[13px] text-[var(--bad)]">
+                {language === 'de'
+                  ? 'Berechnung fehlgeschlagen — bitte die Modellkonfiguration prüfen.'
+                  : 'Calculation failed — check the model configuration.'}
+              </div>
+            )}
+          </div>
         </div>
 
-        <div>
-          {result ? (
-            <Results result={result} />
-          ) : (
-            <p className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-200">
-              Calculation failed — check the model configuration.
-            </p>
-          )}
-        </div>
-      </div>
-
-      <footer className="mt-8 border-t border-slate-200 pt-4 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400">
-        <p>
-          {language === 'de'
-            ? 'Alle Formeln und Quellen sind in METHODIK.md dokumentiert. Energiemodell nach dem erweiterten Energie-Roofline-Modell:'
-            : 'All formulas and sources are documented in METHODIK.md. Energy model follows the extended energy roofline:'}{' '}
-          <code>E = ε_flop·W + ε_mop·Q + π₀·T</code>
-        </p>
-      </footer>
+        <footer className="mt-8 border-t border-[var(--border)] pt-4 pb-2 text-[11px] leading-relaxed text-[var(--text-3)]">
+          <p>
+            {language === 'de'
+              ? 'Alle Formeln und Quellen sind in METHODIK.md dokumentiert. Energiemodell nach dem erweiterten Energie-Roofline-Modell:'
+              : 'All formulas and sources are documented in METHODIK.md. Energy model follows the extended energy roofline:'}{' '}
+            <code className="rounded bg-[var(--surface-2)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--text-2)]">
+              E = ε_flop·W + ε_mop·Q + π₀·T
+            </code>
+          </p>
+        </footer>
+      </main>
     </div>
   );
 }

@@ -4,10 +4,10 @@ import { getQuant } from '../core/quant';
 import { peakFlopsFor } from '../core/roofline';
 import type { EnergyMode } from '../core/types';
 import { GPUS, getGpu } from '../data/gpus';
-import { PUE_PRESETS, REGIONS } from '../data/regions';
+import { getRegion, PUE_PRESETS, REGIONS } from '../data/regions';
 import { useLanguage, useT } from '../i18n';
 import { fetchApiPrices } from '../services/openrouter';
-import { availablePrices, useStore } from '../state/store';
+import { availablePrices, effectiveRegion, useStore } from '../state/store';
 import { num, sci } from '../ui/format';
 import { Button, Card, Field, NumberInput, Select, Slider } from '../ui/primitives';
 
@@ -17,6 +17,9 @@ export function EnergyCostPanel() {
   const state = useStore();
   const gpu = getGpu(state.gpuId) ?? GPUS[0];
   const prices = availablePrices(state);
+  const baseRegion = getRegion(state.regionId) ?? REGIONS[0];
+  const region = effectiveRegion(state);
+  const isCustomPrice = state.customPricePerKWh !== null;
 
   // Refresh prices once on mount; the service falls back to cache, then to the
   // bundled snapshot, so this can fail silently without breaking the page.
@@ -47,7 +50,7 @@ export function EnergyCostPanel() {
         </Field>
 
         {state.energyMode === 'roofline' && state.advanced && (
-          <div className="space-y-3 rounded-lg bg-slate-50 p-3 dark:bg-slate-800/60">
+          <div className="space-y-3 rounded-[var(--radius-sm)] bg-[var(--surface-2)] p-3">
             <Field label={`${t('energy.epsFlop')} (pJ/FLOP)`}>
               <NumberInput
                 value={state.epsFlopPJ ?? Number(defaultEpsFlopPJ(gpu, peakFlops).toPrecision(4))}
@@ -64,7 +67,7 @@ export function EnergyCostPanel() {
                 min={0}
               />
             </Field>
-            <p className="text-xs tabular-nums text-slate-500 dark:text-slate-400">
+            <p className="text-[11px] tabular-nums text-[var(--text-3)]">
               {t('energy.idle')}: {gpu.idleW} W · defaults ε_flop={' '}
               {sci(defaultEpsFlopPJ(gpu, peakFlops), language)} · ε_mop={' '}
               {sci(defaultEpsMopPJ(gpu), language)}
@@ -118,9 +121,20 @@ export function EnergyCostPanel() {
           </Field>
         )}
 
-        <div className="border-t border-slate-200 pt-3 dark:border-slate-700">
+        <div className="space-y-3 border-t border-[var(--border)] pt-3">
           <Field label={t('cost.region')}>
-            <Select value={state.regionId} onChange={(v) => state.set('regionId', v)}>
+            <Select
+              value={state.regionId}
+              onChange={(v) => {
+                // Picking a preset means wanting the preset, so any manual
+                // override is cleared rather than silently masking it.
+                state.patch({
+                  regionId: v,
+                  customPricePerKWh: null,
+                  customGridIntensity: null,
+                });
+              }}
+            >
               {REGIONS.map((r) => (
                 <option key={r.id} value={r.id}>
                   {t(r.label)} — {num(r.pricePerKWh, language, 3)} {r.currency}/kWh
@@ -128,6 +142,55 @@ export function EnergyCostPanel() {
               ))}
             </Select>
           </Field>
+
+          <Field
+            label={t('cost.pricePerKWh')}
+            help={isCustomPrice ? undefined : baseRegion.source}
+            hint={
+              isCustomPrice ? (
+                <button
+                  type="button"
+                  className="cursor-pointer text-[11px] font-medium text-[var(--accent)] hover:underline"
+                  onClick={() => state.set('customPricePerKWh', null)}
+                >
+                  {t('cost.resetPreset')}
+                </button>
+              ) : undefined
+            }
+          >
+            <NumberInput
+              value={region.pricePerKWh}
+              onChange={(v) => state.set('customPricePerKWh', v)}
+              min={0}
+              step={0.01}
+              suffix={`${region.currency}/kWh`}
+            />
+          </Field>
+
+          {state.advanced && (
+            <Field
+              label={t('cost.gridIntensity')}
+              hint={
+                state.customGridIntensity !== null ? (
+                  <button
+                    type="button"
+                    className="cursor-pointer text-[11px] font-medium text-[var(--accent)] hover:underline"
+                    onClick={() => state.set('customGridIntensity', null)}
+                  >
+                    {t('cost.resetPreset')}
+                  </button>
+                ) : undefined
+              }
+            >
+              <NumberInput
+                value={region.gridIntensityGCO2PerKWh}
+                onChange={(v) => state.set('customGridIntensity', v)}
+                min={0}
+                step={10}
+                suffix="g/kWh"
+              />
+            </Field>
+          )}
         </div>
 
         <Field

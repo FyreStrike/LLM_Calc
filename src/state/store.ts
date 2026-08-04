@@ -6,6 +6,7 @@ import type {
   EnergyMode,
   ModelSpec,
   Parallelism,
+  Region,
   Runtime,
 } from '../core/types';
 import { getKvQuant, getQuant } from '../core/quant';
@@ -47,6 +48,14 @@ export interface AppState {
 
   // cost
   regionId: string;
+  /**
+   * Overrides the selected region's tariff when set. Presets are sourced
+   * averages; an actual contract rarely matches one, and the price feeds
+   * straight into the local-vs-API verdict.
+   */
+  customPricePerKWh: number | null;
+  /** Overrides the region's grid carbon intensity (own PV, green tariff). */
+  customGridIntensity: number | null;
   inputRatio: number;
   hardwareCapex: number | null;
   dailyTokens: number;
@@ -105,6 +114,8 @@ const DEFAULTS: AppState = {
   hostOverheadW: 80,
 
   regionId: DEFAULT_REGION_ID,
+  customPricePerKWh: null,
+  customGridIntensity: null,
   inputRatio: 0.7,
   hardwareCapex: null,
   dailyTokens: 1_000_000,
@@ -182,10 +193,29 @@ export function selectedApiPrice(state: AppState): ApiPrice | undefined {
   return mapped ? prices.find((p) => p.id === mapped) : undefined;
 }
 
+/**
+ * The region actually used for costing: the selected preset, with the user's
+ * own tariff and grid intensity substituted where they supplied them.
+ */
+export function effectiveRegion(state: AppState): Region {
+  const base = getRegion(state.regionId) ?? REGIONS[0];
+  const custom = state.customPricePerKWh !== null || state.customGridIntensity !== null;
+  if (!custom) return base;
+
+  return {
+    ...base,
+    id: 'custom',
+    label: 'region.custom',
+    pricePerKWh: state.customPricePerKWh ?? base.pricePerKWh,
+    gridIntensityGCO2PerKWh: state.customGridIntensity ?? base.gridIntensityGCO2PerKWh,
+    source: undefined,
+  };
+}
+
 export function buildCalcInput(state: AppState): CalcInput {
   const model = selectedModel(state);
   const gpu = getGpu(state.gpuId) ?? GPUS[0];
-  const region = getRegion(state.regionId) ?? REGIONS[0];
+  const region = effectiveRegion(state);
 
   return {
     model,
@@ -237,8 +267,8 @@ const SHARE_KEYS = [
   'modelId', 'gpuId', 'numGpus', 'parallelism', 'quantId', 'kvQuantId',
   'contextLength', 'promptTokens', 'outputTokens', 'batchSize', 'runtime',
   'allowOffload', 'mbu', 'mfu', 'energyMode', 'psuEfficiency', 'pue',
-  'hostOverheadW', 'regionId', 'inputRatio', 'hardwareCapex', 'dailyTokens',
-  'apiPriceId', 'advanced',
+  'hostOverheadW', 'regionId', 'customPricePerKWh', 'customGridIntensity',
+  'inputRatio', 'hardwareCapex', 'dailyTokens', 'apiPriceId', 'advanced',
 ] as const satisfies readonly (keyof AppState)[];
 
 export function stateToQuery(state: AppState): string {
@@ -252,6 +282,18 @@ export function stateToQuery(state: AppState): string {
   return params.toString();
 }
 
+/**
+ * Keys whose default is `null` — their type cannot be inferred from the
+ * default, so they are declared explicitly rather than parsed as strings.
+ */
+const NULLABLE_NUMBER_KEYS = new Set<keyof AppState>([
+  'hardwareCapex',
+  'customPricePerKWh',
+  'customGridIntensity',
+  'epsFlopPJ',
+  'epsMopPJ',
+]);
+
 export function queryToState(query: string): Partial<AppState> {
   const params = new URLSearchParams(query);
   const out: Record<string, unknown> = {};
@@ -261,7 +303,7 @@ export function queryToState(query: string): Partial<AppState> {
     if (raw === null) continue;
 
     const fallback = DEFAULTS[key];
-    if (typeof fallback === 'number') {
+    if (typeof fallback === 'number' || NULLABLE_NUMBER_KEYS.has(key)) {
       const n = Number(raw);
       if (Number.isFinite(n)) out[key] = n;
     } else if (typeof fallback === 'boolean') {
@@ -269,12 +311,6 @@ export function queryToState(query: string): Partial<AppState> {
     } else {
       out[key] = raw;
     }
-  }
-
-  // hardwareCapex defaults to null, so it needs handling outside the switch.
-  const capex = params.get('hardwareCapex');
-  if (capex !== null && Number.isFinite(Number(capex))) {
-    out.hardwareCapex = Number(capex);
   }
 
   return out as Partial<AppState>;

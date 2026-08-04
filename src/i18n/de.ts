@@ -168,7 +168,10 @@ export const de: Translations = {
   },
 
   cost: {
-    region: 'Strompreis',
+    region: 'Region / Tarif',
+    pricePerKWh: 'Strompreis',
+    gridIntensity: 'CO₂-Intensität des Netzes',
+    resetPreset: 'Voreinstellung',
     inputRatio: 'Anteil Input-Token',
     inputRatioHelp: 'Input-Token sind meist deutlich günstiger als Output. Ohne das Verhältnis verzerrt der Vergleich.',
     hardwareCapex: 'Hardwarekosten',
@@ -260,6 +263,7 @@ export const de: Translations = {
     usResidential: 'USA — Haushalt',
     usCommercial: 'USA — Gewerbe',
     usIndustrial: 'USA — Industrie',
+    custom: 'Eigener Tarif',
   },
 
   pue: {

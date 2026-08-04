@@ -1,32 +1,48 @@
 import type { ReactNode } from 'react';
 
+/* ------------------------------------------------------------------ surfaces */
+
 export function Card({
   title,
   children,
   right,
+  subtle = false,
   className = '',
 }: {
   title?: string;
   children: ReactNode;
   right?: ReactNode;
+  /** Nested panel styling — flat fill, no elevation. */
+  subtle?: boolean;
   className?: string;
 }) {
   return (
     <section
-      className={`rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 ${className}`}
+      className={`rounded-[var(--radius)] border border-[var(--border)] ${
+        subtle
+          ? 'bg-[var(--surface-2)]'
+          : 'bg-[var(--surface)] shadow-[var(--shadow-sm)]'
+      } ${className}`}
     >
       {title && (
-        <header className="mb-3 flex items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-400">
+        <header className="flex items-center justify-between gap-3 px-4 pt-3.5 pb-2">
+          <h2 className="text-[13px] font-semibold tracking-tight text-[var(--text)]">
             {title}
           </h2>
           {right}
         </header>
       )}
-      {children}
+      <div className={title ? 'px-4 pb-4' : 'p-4'}>{children}</div>
     </section>
   );
 }
+
+/** Thin divider that matches the card border exactly. */
+export function Divider({ className = '' }: { className?: string }) {
+  return <div className={`h-px bg-[var(--border)] ${className}`} />;
+}
+
+/* -------------------------------------------------------------------- fields */
 
 export function Field({
   label,
@@ -41,18 +57,24 @@ export function Field({
 }) {
   return (
     <label className="block">
-      <div className="mb-1 flex items-baseline justify-between gap-2">
-        <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{label}</span>
-        {hint && <span className="text-xs tabular-nums text-slate-500 dark:text-slate-400">{hint}</span>}
+      <div className="mb-1.5 flex items-baseline justify-between gap-2">
+        <span className="text-[12px] font-medium text-[var(--text-2)]">{label}</span>
+        {hint && (
+          <span className="text-[12px] font-semibold tabular-nums text-[var(--text)]">
+            {hint}
+          </span>
+        )}
       </div>
       {children}
-      {help && <p className="mt-1 text-xs leading-snug text-slate-500 dark:text-slate-400">{help}</p>}
+      {help && (
+        <p className="mt-1.5 text-[11px] leading-relaxed text-[var(--text-3)]">{help}</p>
+      )}
     </label>
   );
 }
 
-const inputClass =
-  'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100';
+const controlClass =
+  'w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[13px] text-[var(--text)] transition-colors hover:border-[var(--border-strong)] focus:border-[var(--accent)] focus:outline-none';
 
 export function Select<T extends string>({
   value,
@@ -65,7 +87,7 @@ export function Select<T extends string>({
 }) {
   return (
     <select
-      className={inputClass}
+      className={`${controlClass} cursor-pointer`}
       value={value}
       onChange={(e) => onChange(e.target.value as T)}
     >
@@ -81,6 +103,7 @@ export function NumberInput({
   max,
   step,
   placeholder,
+  suffix,
 }: {
   value: number | null;
   onChange: (value: number | null) => void;
@@ -88,23 +111,31 @@ export function NumberInput({
   max?: number;
   step?: number;
   placeholder?: string;
+  suffix?: string;
 }) {
   return (
-    <input
-      type="number"
-      className={inputClass}
-      value={value ?? ''}
-      min={min}
-      max={max}
-      step={step}
-      placeholder={placeholder}
-      onChange={(e) => {
-        const raw = e.target.value;
-        if (raw === '') return onChange(null);
-        const n = Number(raw);
-        onChange(Number.isFinite(n) ? n : null);
-      }}
-    />
+    <div className="relative">
+      <input
+        type="number"
+        className={`${controlClass} tabular-nums ${suffix ? 'pr-10' : ''}`}
+        value={value ?? ''}
+        min={min}
+        max={max}
+        step={step}
+        placeholder={placeholder}
+        onChange={(e) => {
+          const raw = e.target.value;
+          if (raw === '') return onChange(null);
+          const n = Number(raw);
+          onChange(Number.isFinite(n) ? n : null);
+        }}
+      />
+      {suffix && (
+        <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-[11px] text-[var(--text-3)]">
+          {suffix}
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -120,7 +151,7 @@ export function TextInput({
   return (
     <input
       type="text"
-      className={inputClass}
+      className={controlClass}
       value={value}
       placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
@@ -128,10 +159,11 @@ export function TextInput({
   );
 }
 
+/* ------------------------------------------------------------------- sliders */
+
 /**
- * Log-scale slider. Context length and batch size both span several orders of
- * magnitude, so a linear slider wastes almost all of its travel on the top
- * decade.
+ * Log-scale slider. Context length and batch size span several orders of
+ * magnitude; a linear track spends almost all its travel in the top decade.
  */
 export function LogSlider({
   value,
@@ -148,27 +180,33 @@ export function LogSlider({
 }) {
   const ladder = steps ?? defaultLadder(min, max);
   const index = nearestIndex(ladder, value);
+  const ticks = ladder.filter(
+    (_, i) => i % Math.ceil(ladder.length / 5) === 0 || i === ladder.length - 1,
+  );
 
   return (
     <div>
       <input
         type="range"
-        className="w-full accent-sky-600"
         min={0}
         max={ladder.length - 1}
         step={1}
         value={index}
         onChange={(e) => onChange(ladder[Number(e.target.value)])}
       />
-      <div className="mt-1 flex justify-between text-[10px] tabular-nums text-slate-400">
-        {ladder
-          .filter((_, i) => i % Math.ceil(ladder.length / 6) === 0 || i === ladder.length - 1)
-          .map((s) => (
-            <span key={s}>{s >= 1024 ? `${s / 1024}k` : s}</span>
-          ))}
+      <div className="mt-0.5 flex justify-between text-[10px] tabular-nums text-[var(--text-3)]">
+        {ticks.map((s) => (
+          <span key={s}>{formatTick(s)}</span>
+        ))}
       </div>
     </div>
   );
+}
+
+function formatTick(v: number): string {
+  if (v >= 1024 * 1024) return `${v / (1024 * 1024)}M`;
+  if (v >= 1024) return `${v / 1024}k`;
+  return String(v);
 }
 
 function defaultLadder(min: number, max: number): number[] {
@@ -207,7 +245,6 @@ export function Slider({
   return (
     <input
       type="range"
-      className="w-full accent-sky-600"
       min={min}
       max={max}
       step={step}
@@ -216,6 +253,8 @@ export function Slider({
     />
   );
 }
+
+/* ------------------------------------------------------------------ controls */
 
 export function Toggle({
   checked,
@@ -230,16 +269,31 @@ export function Toggle({
 }) {
   return (
     <div>
-      <label className="flex cursor-pointer items-center gap-2">
-        <input
-          type="checkbox"
-          className="h-4 w-4 accent-sky-600"
-          checked={checked}
-          onChange={(e) => onChange(e.target.checked)}
-        />
-        <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{label}</span>
-      </label>
-      {help && <p className="mt-1 ml-6 text-xs leading-snug text-slate-500 dark:text-slate-400">{help}</p>}
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        onClick={() => onChange(!checked)}
+        className="flex w-full cursor-pointer items-center gap-2.5 text-left"
+      >
+        <span
+          className={`relative inline-flex h-[18px] w-[32px] shrink-0 items-center rounded-full transition-colors ${
+            checked ? 'bg-[var(--accent)]' : 'bg-[var(--surface-3)]'
+          }`}
+        >
+          <span
+            className={`inline-block h-[14px] w-[14px] rounded-full bg-white shadow-sm transition-transform ${
+              checked ? 'translate-x-[16px]' : 'translate-x-[2px]'
+            }`}
+          />
+        </span>
+        <span className="text-[12px] font-medium text-[var(--text)]">{label}</span>
+      </button>
+      {help && (
+        <p className="mt-1 ml-[42px] text-[11px] leading-relaxed text-[var(--text-3)]">
+          {help}
+        </p>
+      )}
     </div>
   );
 }
@@ -254,16 +308,16 @@ export function SegmentedControl<T extends string>({
   onChange: (value: T) => void;
 }) {
   return (
-    <div className="inline-flex rounded-lg border border-slate-300 bg-slate-100 p-0.5 dark:border-slate-600 dark:bg-slate-800">
+    <div className="inline-flex rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface-2)] p-[3px]">
       {options.map((o) => (
         <button
           key={o.value}
           type="button"
           onClick={() => onChange(o.value)}
-          className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+          className={`cursor-pointer rounded-[6px] px-2.5 py-1 text-[12px] font-medium transition-all ${
             value === o.value
-              ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-600 dark:text-white'
-              : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white'
+              ? 'bg-[var(--surface)] text-[var(--text)] shadow-[var(--shadow-sm)]'
+              : 'text-[var(--text-3)] hover:text-[var(--text)]'
           }`}
         >
           {o.label}
@@ -273,88 +327,140 @@ export function SegmentedControl<T extends string>({
   );
 }
 
-export function Stat({
-  label,
-  value,
-  unit,
-  sub,
-  tone = 'default',
-}: {
-  label: string;
-  value: string;
-  unit?: string;
-  sub?: string;
-  tone?: 'default' | 'good' | 'bad' | 'warn';
-}) {
-  const toneClass = {
-    default: 'text-slate-900 dark:text-slate-50',
-    good: 'text-emerald-600 dark:text-emerald-400',
-    bad: 'text-rose-600 dark:text-rose-400',
-    warn: 'text-amber-600 dark:text-amber-400',
-  }[tone];
-
-  return (
-    <div>
-      <div className="text-xs font-medium text-slate-500 dark:text-slate-400">{label}</div>
-      <div className={`mt-0.5 text-xl font-semibold tabular-nums ${toneClass}`}>
-        {value}
-        {unit && <span className="ml-1 text-sm font-normal text-slate-500 dark:text-slate-400">{unit}</span>}
-      </div>
-      {sub && <div className="text-xs text-slate-500 dark:text-slate-400">{sub}</div>}
-    </div>
-  );
-}
-
-export function Badge({
-  children,
-  tone = 'neutral',
-}: {
-  children: ReactNode;
-  tone?: 'neutral' | 'good' | 'bad' | 'warn' | 'info';
-}) {
-  const toneClass = {
-    neutral: 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200',
-    good: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300',
-    bad: 'bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-300',
-    warn: 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300',
-    info: 'bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-300',
-  }[tone];
-
-  return (
-    <span className={`inline-block rounded px-1.5 py-0.5 text-[11px] font-medium ${toneClass}`}>
-      {children}
-    </span>
-  );
-}
-
 export function Button({
   children,
   onClick,
   variant = 'secondary',
   disabled,
   type = 'button',
+  size = 'md',
 }: {
   children: ReactNode;
   onClick?: () => void;
   variant?: 'primary' | 'secondary' | 'ghost';
   disabled?: boolean;
   type?: 'button' | 'submit';
+  size?: 'sm' | 'md';
 }) {
   const variantClass = {
-    primary: 'bg-sky-600 text-white hover:bg-sky-500 disabled:bg-slate-300',
+    primary:
+      'bg-[var(--accent)] text-[var(--accent-ink)] hover:bg-[var(--accent-hover)] shadow-[var(--shadow-sm)]',
     secondary:
-      'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700',
-    ghost: 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white',
+      'border border-[var(--border)] bg-[var(--surface)] text-[var(--text-2)] hover:border-[var(--border-strong)] hover:text-[var(--text)]',
+    ghost: 'text-[var(--text-3)] hover:text-[var(--text)] hover:bg-[var(--surface-2)]',
   }[variant];
+
+  const sizeClass = size === 'sm' ? 'px-2.5 py-1 text-[12px]' : 'px-3 py-1.5 text-[12px]';
 
   return (
     <button
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className={`rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60 ${variantClass}`}
+      className={`cursor-pointer rounded-[var(--radius-sm)] font-medium transition-all disabled:cursor-not-allowed disabled:opacity-50 ${variantClass} ${sizeClass}`}
     >
       {children}
     </button>
+  );
+}
+
+/* ------------------------------------------------------------------- display */
+
+const TONE_INK = {
+  default: 'text-[var(--text)]',
+  good: 'text-[var(--good)]',
+  bad: 'text-[var(--bad)]',
+  warn: 'text-[var(--warn)]',
+  accent: 'text-[var(--accent)]',
+} as const;
+
+export type Tone = keyof typeof TONE_INK;
+
+export function Stat({
+  label,
+  value,
+  unit,
+  sub,
+  tone = 'default',
+  size = 'md',
+}: {
+  label: string;
+  value: string;
+  unit?: string;
+  sub?: string;
+  tone?: Tone;
+  size?: 'md' | 'lg';
+}) {
+  return (
+    <div>
+      <div className="text-[11px] font-medium tracking-wide text-[var(--text-3)] uppercase">
+        {label}
+      </div>
+      <div
+        className={`mt-1 font-semibold tracking-tight tabular-nums ${TONE_INK[tone]} ${
+          size === 'lg' ? 'text-[28px] leading-none' : 'text-[19px] leading-tight'
+        }`}
+      >
+        {value}
+        {unit && (
+          <span className="ml-1 text-[12px] font-normal text-[var(--text-3)]">{unit}</span>
+        )}
+      </div>
+      {sub && <div className="mt-1 text-[11px] text-[var(--text-3)]">{sub}</div>}
+    </div>
+  );
+}
+
+const BADGE_TONE = {
+  neutral: 'bg-[var(--surface-3)] text-[var(--text-2)]',
+  good: 'bg-[var(--good-soft)] text-[var(--good)]',
+  bad: 'bg-[var(--bad-soft)] text-[var(--bad)]',
+  warn: 'bg-[var(--warn-soft)] text-[var(--warn)]',
+  info: 'bg-[var(--accent-soft)] text-[var(--accent)]',
+} as const;
+
+export function Badge({
+  children,
+  tone = 'neutral',
+}: {
+  children: ReactNode;
+  tone?: keyof typeof BADGE_TONE;
+}) {
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2 py-[3px] text-[11px] font-medium whitespace-nowrap ${BADGE_TONE[tone]}`}
+    >
+      {children}
+    </span>
+  );
+}
+
+/** Small colour chip that ties a table row to its mark in the chart above it. */
+export function Swatch({ color }: { color: string }) {
+  return (
+    <span
+      className="mr-2 inline-block h-2.5 w-2.5 shrink-0 rounded-[3px] align-middle"
+      style={{ background: color }}
+    />
+  );
+}
+
+export function Note({
+  children,
+  tone = 'info',
+}: {
+  children: ReactNode;
+  tone?: 'info' | 'warn' | 'bad' | 'neutral';
+}) {
+  const cls = {
+    info: 'bg-[var(--accent-soft)] text-[var(--accent)]',
+    warn: 'bg-[var(--warn-soft)] text-[var(--warn)]',
+    bad: 'bg-[var(--bad-soft)] text-[var(--bad)]',
+    neutral: 'bg-[var(--surface-2)] text-[var(--text-2)]',
+  }[tone];
+  return (
+    <p className={`rounded-[var(--radius-sm)] px-2.5 py-2 text-[11px] leading-relaxed ${cls}`}>
+      {children}
+    </p>
   );
 }

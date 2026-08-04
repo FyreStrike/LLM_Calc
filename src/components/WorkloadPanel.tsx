@@ -91,7 +91,7 @@ export function WorkloadPanel() {
         )}
 
         {state.advanced && (
-          <div className="space-y-3 border-t border-slate-200 pt-3 dark:border-slate-700">
+          <div className="space-y-3 border-t border-[var(--border)] pt-3">
             <Field
               label={t('workload.mbu')}
               hint={`${num(state.mbu * 100, language, 0)}%`}

@@ -166,7 +166,10 @@ export const en = {
   },
 
   cost: {
-    region: 'Electricity price',
+    region: 'Region / tariff',
+    pricePerKWh: 'Electricity price',
+    gridIntensity: 'Grid carbon intensity',
+    resetPreset: 'Use preset',
     inputRatio: 'Share of input tokens',
     inputRatioHelp: 'Input tokens are usually far cheaper than output. Ignoring the mix skews the comparison.',
     hardwareCapex: 'Hardware cost',
@@ -258,6 +261,7 @@ export const en = {
     usResidential: 'USA — residential',
     usCommercial: 'USA — commercial',
     usIndustrial: 'USA — industrial',
+    custom: 'Custom tariff',
   },
 
   pue: {

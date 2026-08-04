@@ -10,6 +10,7 @@ import {
   Button,
   Card,
   Field,
+  Note,
   NumberInput,
   Select,
   TextInput,
@@ -68,18 +69,14 @@ export function ModelPanel() {
         )}
 
         {showCustom && (
-          <div className="space-y-4 border-t border-slate-200 pt-4 dark:border-slate-700">
+          <div className="space-y-4 border-t border-[var(--border)] pt-4">
             <HfImport onDone={() => setShowCustom(false)} />
             <CustomModelForm onDone={() => setShowCustom(false)} />
           </div>
         )}
-      </div>
 
-      {model.note && (
-        <p className="mt-3 rounded-lg bg-sky-50 p-2 text-xs leading-snug text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
-          {t(model.note)}
-        </p>
-      )}
+        {model.note && <Note>{t(model.note)}</Note>}
+      </div>
 
       <p className="sr-only">{params(model.paramsTotal, language)}</p>
     </Card>
@@ -127,11 +124,11 @@ function ModelSummary({ model }: { model: ModelSpec }) {
           </Badge>
         )}
       </div>
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
         {rows.map(([label, value]) => (
           <div key={label} className="flex justify-between gap-2">
-            <dt className="text-slate-500 dark:text-slate-400">{label}</dt>
-            <dd className="font-medium tabular-nums text-slate-800 dark:text-slate-100">{value}</dd>
+            <dt className="text-[var(--text-3)]">{label}</dt>
+            <dd className="font-semibold tabular-nums text-[var(--text-2)]">{value}</dd>
           </div>
         ))}
       </dl>
@@ -181,7 +178,7 @@ function HfImport({ onDone }: { onDone: () => void }) {
       <Button variant="primary" onClick={run} disabled={busy || repo.trim() === ''}>
         {busy ? t('model.importing') : t('model.import')}
       </Button>
-      {error && <p className="text-xs text-rose-600 dark:text-rose-400">{error}</p>}
+      {error && <Note tone="bad">{error}</Note>}
     </div>
   );
 }
@@ -276,7 +273,7 @@ function CustomModelForm({ onDone }: { onDone: () => void }) {
       </div>
 
       {draft.attention === 'mla' && (
-        <div className="grid grid-cols-2 gap-3 rounded-lg bg-sky-50 p-2 dark:bg-sky-950/40">
+        <div className="grid grid-cols-2 gap-3 rounded-[var(--radius-sm)] bg-[var(--accent-soft)] p-2.5">
           {numField(t('model.kvLoraRank'), 'kvLoraRank')}
           {numField(t('model.qkRopeHeadDim'), 'qkRopeHeadDim')}
         </div>
@@ -285,7 +282,7 @@ function CustomModelForm({ onDone }: { onDone: () => void }) {
       <Toggle checked={isMoe} onChange={setIsMoe} label={t('model.isMoe')} />
 
       {isMoe && (
-        <div className="grid grid-cols-2 gap-3 rounded-lg bg-slate-50 p-2 dark:bg-slate-800/60">
+        <div className="grid grid-cols-2 gap-3 rounded-[var(--radius-sm)] bg-[var(--surface-2)] p-2.5">
           {numField(`${t('model.paramsActive')} (B)`, 'paramsActive', t('model.paramsActiveHelp'), 1e9)}
           <Field label={t('model.numExperts')}>
             <NumberInput
