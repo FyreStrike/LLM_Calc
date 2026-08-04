@@ -1,12 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { REGIONS } from '../../data/regions';
 import {
+  API_PRICE_AUTO,
+  API_PRICE_CUSTOM,
+  API_PRICE_NONE,
+  buildCalcInput,
   DEFAULTS,
   effectiveRegion,
   queryToState,
+  selectedApiPrice,
   stateToQuery,
   type AppState,
 } from '../../state/store';
+import { runCalculation } from '../index';
 
 const base = (over: Partial<AppState> = {}): AppState => ({ ...DEFAULTS, ...over });
 
@@ -44,6 +50,77 @@ describe('effective region', () => {
     // Someone on fully self-generated power should get 0, not the preset.
     const r = effectiveRegion(base({ customPricePerKWh: 0 }));
     expect(r.pricePerKWh).toBe(0);
+  });
+});
+
+describe('API price selection', () => {
+  it('auto-selects the listing that serves the same weights', () => {
+    const p = selectedApiPrice(base({ modelId: 'llama-3.1-8b', apiPriceId: API_PRICE_AUTO }));
+    expect(p?.id).toBe('meta-llama/llama-3.1-8b-instruct');
+  });
+
+  it('REGRESSION: "no comparison" actually removes the comparison', () => {
+    // A single null used to mean both "none" and "auto", so picking "no
+    // comparison" fell through to the model mapping and kept comparing.
+    const model = base({ modelId: 'llama-3.1-8b', apiPriceId: API_PRICE_NONE });
+    expect(selectedApiPrice(model)).toBeUndefined();
+
+    // ...while auto on the same model still resolves.
+    expect(selectedApiPrice({ ...model, apiPriceId: API_PRICE_AUTO })).toBeDefined();
+  });
+
+  it('honours an explicitly chosen listing over the model mapping', () => {
+    const p = selectedApiPrice(
+      base({ modelId: 'llama-3.1-8b', apiPriceId: 'anthropic/claude-opus-5' }),
+    );
+    expect(p?.id).toBe('anthropic/claude-opus-5');
+  });
+
+  it('returns the user’s own prices in custom mode', () => {
+    const p = selectedApiPrice(
+      base({
+        apiPriceId: API_PRICE_CUSTOM,
+        customApiInputPerMTokUsd: 0.42,
+        customApiOutputPerMTokUsd: 1.7,
+      }),
+    );
+    expect(p?.id).toBe('custom');
+    expect(p?.inputPerMTokUsd).toBe(0.42);
+    expect(p?.outputPerMTokUsd).toBe(1.7);
+  });
+
+  it('treats a cleared custom field as zero rather than falling back', () => {
+    const p = selectedApiPrice(
+      base({
+        apiPriceId: API_PRICE_CUSTOM,
+        customApiInputPerMTokUsd: null,
+        customApiOutputPerMTokUsd: null,
+      }),
+    );
+    expect(p?.inputPerMTokUsd).toBe(0);
+    expect(p?.outputPerMTokUsd).toBe(0);
+  });
+
+  it('feeds custom prices through the blended comparison', () => {
+    const r = runCalculation(
+      buildCalcInput(
+        base({
+          apiPriceId: API_PRICE_CUSTOM,
+          customApiInputPerMTokUsd: 1,
+          customApiOutputPerMTokUsd: 3,
+          inputRatio: 0.5,
+          regionId: 'us-commercial', // USD, so no conversion to reason about
+        }),
+      ),
+    );
+    // 0.5 x 1 + 0.5 x 3 = 2.00 USD per 1M
+    expect(r.cost.apiPerMTokens).toBeCloseTo(2, 6);
+  });
+
+  it('produces no comparison figures when set to none', () => {
+    const r = runCalculation(buildCalcInput(base({ apiPriceId: API_PRICE_NONE })));
+    expect(r.cost.apiPerMTokens).toBeUndefined();
+    expect(r.cost.savingsPerMTokens).toBeUndefined();
   });
 });
 

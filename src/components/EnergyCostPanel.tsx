@@ -7,7 +7,14 @@ import { GPUS, getGpu } from '../data/gpus';
 import { getRegion, PUE_PRESETS, REGIONS } from '../data/regions';
 import { useLanguage, useT } from '../i18n';
 import { fetchApiPrices } from '../services/openrouter';
-import { availablePrices, effectiveRegion, useStore } from '../state/store';
+import {
+  API_PRICE_AUTO,
+  API_PRICE_CUSTOM,
+  API_PRICE_NONE,
+  availablePrices,
+  effectiveRegion,
+  useStore,
+} from '../state/store';
 import { num, sci } from '../ui/format';
 import { Button, Card, Field, NumberInput, Select, Slider } from '../ui/primitives';
 
@@ -205,10 +212,12 @@ export function EnergyCostPanel() {
           }`}
         >
           <Select
-            value={state.apiPriceId ?? ''}
-            onChange={(v) => state.set('apiPriceId', v === '' ? null : v)}
+            value={state.apiPriceId ?? API_PRICE_AUTO}
+            onChange={(v) => state.set('apiPriceId', v)}
           >
-            <option value="">{t('cost.apiNone')}</option>
+            <option value={API_PRICE_AUTO}>{t('cost.apiAuto')}</option>
+            <option value={API_PRICE_NONE}>{t('cost.apiNone')}</option>
+            <option value={API_PRICE_CUSTOM}>{t('cost.apiCustom')}</option>
             {prices.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.label} — ${num(p.inputPerMTokUsd, language, 2)}/$
@@ -217,6 +226,32 @@ export function EnergyCostPanel() {
             ))}
           </Select>
         </Field>
+
+        {state.apiPriceId === API_PRICE_CUSTOM && (
+          <div className="grid grid-cols-2 gap-3 rounded-[var(--radius-sm)] bg-[var(--surface-2)] p-2.5">
+            <Field label={t('cost.customInput')}>
+              <NumberInput
+                value={state.customApiInputPerMTokUsd}
+                onChange={(v) => state.set('customApiInputPerMTokUsd', v)}
+                min={0}
+                step={0.05}
+                suffix="$"
+              />
+            </Field>
+            <Field label={t('cost.customOutput')}>
+              <NumberInput
+                value={state.customApiOutputPerMTokUsd}
+                onChange={(v) => state.set('customApiOutputPerMTokUsd', v)}
+                min={0}
+                step={0.05}
+                suffix="$"
+              />
+            </Field>
+            <p className="col-span-2 text-[11px] leading-relaxed text-[var(--text-3)]">
+              {t('cost.customPriceHelp', { currency: region.currency })}
+            </p>
+          </div>
+        )}
 
         <Field
           label={t('cost.inputRatio')}

@@ -241,7 +241,13 @@ export const en = {
     hardwareCapexHelp: 'Enables the break-even calculation. Leave empty to compare marginal cost only.',
     dailyTokens: 'Tokens per day',
     apiModel: 'Compare against API',
+    apiAuto: 'Automatic — matches the model',
     apiNone: 'No comparison',
+    apiCustom: 'Custom prices …',
+    customInput: 'Input per 1M',
+    customOutput: 'Output per 1M',
+    customPriceHelp:
+      'In US dollars per 1M tokens, the way providers quote them. Conversion to {{currency}} happens automatically.',
     priceOrigin: {
       live: 'Live prices from OpenRouter',
       cache: 'Cached prices',

@@ -79,7 +79,11 @@ export interface AppState {
   hardwareCapex: number | null;
   dailyTokens: number;
   usdToCurrency: number;
+  /** 'auto' | 'none' | 'custom' | an id from the price list. */
   apiPriceId: string | null;
+  /** Used when apiPriceId is 'custom'. USD per 1M tokens, as providers quote. */
+  customApiInputPerMTokUsd: number | null;
+  customApiOutputPerMTokUsd: number | null;
   livePrices: ApiPrice[] | null;
   priceOrigin: 'live' | 'cache' | 'snapshot';
   priceAsOf: string;
@@ -100,6 +104,17 @@ export interface AppActions {
   ) => void;
   reset: () => void;
 }
+
+/**
+ * Explicit selection sentinels for the API comparison.
+ *
+ * These exist because a single `null` previously meant both "no comparison"
+ * and "pick the listing that matches the model", so selecting "no comparison"
+ * silently kept comparing against the mapped model.
+ */
+export const API_PRICE_AUTO = 'auto';
+export const API_PRICE_NONE = 'none';
+export const API_PRICE_CUSTOM = 'custom';
 
 const DEFAULTS: AppState = {
   modelId: 'llama-3.1-8b',
@@ -152,7 +167,9 @@ const DEFAULTS: AppState = {
   hardwareCapex: null,
   dailyTokens: 1_000_000,
   usdToCurrency: DEFAULT_USD_TO_EUR,
-  apiPriceId: null,
+  apiPriceId: API_PRICE_AUTO,
+  customApiInputPerMTokUsd: 0.5,
+  customApiOutputPerMTokUsd: 1.5,
   livePrices: null,
   priceOrigin: 'snapshot',
   priceAsOf: '',
@@ -216,11 +233,27 @@ export function availablePrices(state: AppState): ApiPrice[] {
  * the headline number compares like with like rather than an arbitrary model.
  */
 export function selectedApiPrice(state: AppState): ApiPrice | undefined {
+  // `null` used to mean both "no comparison" and "pick one matching the
+  // model", so choosing "no comparison" silently kept comparing.
+  if (state.apiPriceId === API_PRICE_NONE) return undefined;
+
+  if (state.apiPriceId === API_PRICE_CUSTOM) {
+    return {
+      id: API_PRICE_CUSTOM,
+      label: 'Custom',
+      inputPerMTokUsd: state.customApiInputPerMTokUsd ?? 0,
+      outputPerMTokUsd: state.customApiOutputPerMTokUsd ?? 0,
+    };
+  }
+
   const prices = availablePrices(state);
-  if (state.apiPriceId) {
+  if (state.apiPriceId && state.apiPriceId !== API_PRICE_AUTO) {
     const explicit = prices.find((p) => p.id === state.apiPriceId);
     if (explicit) return explicit;
   }
+
+  // Auto: the listing that serves the same weights, so the headline compares
+  // like with like.
   const mapped = MODEL_TO_API_PRICE[state.modelId];
   return mapped ? prices.find((p) => p.id === mapped) : undefined;
 }
@@ -332,7 +365,8 @@ const SHARE_KEYS = [
   'ramModules', 'cpuId', 'cpuSockets', 'boardId', 'coolingId', 'driveId',
   'driveCount', 'hostBaseOverheadOverrideW',
   'hostOverheadW', 'regionId', 'customPricePerKWh', 'customGridIntensity',
-  'inputRatio', 'hardwareCapex', 'dailyTokens', 'apiPriceId', 'advanced',
+  'inputRatio', 'hardwareCapex', 'dailyTokens', 'apiPriceId',
+  'customApiInputPerMTokUsd', 'customApiOutputPerMTokUsd', 'advanced',
 ] as const satisfies readonly (keyof AppState)[];
 
 export function stateToQuery(state: AppState): string {

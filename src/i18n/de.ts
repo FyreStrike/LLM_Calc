@@ -243,7 +243,13 @@ export const de: Translations = {
     hardwareCapexHelp: 'Aktiviert die Amortisationsrechnung. Leer lassen, um nur die Grenzkosten zu vergleichen.',
     dailyTokens: 'Token pro Tag',
     apiModel: 'Vergleich mit API',
+    apiAuto: 'Automatisch — passend zum Modell',
     apiNone: 'Kein Vergleich',
+    apiCustom: 'Eigene Preise …',
+    customInput: 'Input je 1 Mio.',
+    customOutput: 'Output je 1 Mio.',
+    customPriceHelp:
+      'Angabe in US-Dollar je 1 Mio. Token, so wie Anbieter ihre Preise nennen. Die Umrechnung nach {{currency}} erfolgt automatisch.',
     priceOrigin: {
       live: 'Live-Preise von OpenRouter',
       cache: 'Zwischengespeicherte Preise',
