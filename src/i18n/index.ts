@@ -57,4 +57,15 @@ export function useT(): TranslateFn {
   return (key, values) => translate(language, key, values);
 }
 
+/**
+ * Keep `<html lang>` in step with the chosen language. Screen readers pick
+ * pronunciation from it, so a German page announced as English is close to
+ * unusable — and the static markup can only carry one of the two.
+ */
+useLanguage.subscribe((s) => {
+  if (typeof document !== 'undefined') {
+    document.documentElement.lang = s.language;
+  }
+});
+
 export { de, en };
