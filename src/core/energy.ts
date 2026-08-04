@@ -84,6 +84,11 @@ export function computeEnergy(
   workload: Workload,
   options: EnergyOptions,
   peakFlops: number,
+  /**
+   * Host draw split into its parts. When absent, `options.hostOverheadW` is
+   * used as a single undifferentiated figure.
+   */
+  hostPower?: { baseW: number; ramIdleW: number; ramActiveW: number },
 ): EnergyResult {
   const idleW = options.idleW ?? gpu.idleW;
   const epsFlopPJ = options.epsFlopPJ ?? defaultEpsFlopPJ(gpu, peakFlops);
@@ -133,8 +138,16 @@ export function computeEnergy(
   // Wall-plug energy: the GPU is only part of what the meter sees. The host
   // draws power too, the PSU wastes some, and a datacenter multiplies the
   // whole thing by its PUE.
-  const systemPowerW =
-    (decodePowerW + options.hostOverheadW) / Math.max(0.5, options.psuEfficiency);
+  const host = hostPower
+    ? {
+        baseW: hostPower.baseW,
+        ramIdleW: hostPower.ramIdleW,
+        ramActiveW: hostPower.ramActiveW,
+        totalW: hostPower.baseW + hostPower.ramIdleW + hostPower.ramActiveW,
+      }
+    : { baseW: options.hostOverheadW, ramIdleW: 0, ramActiveW: 0, totalW: options.hostOverheadW };
+
+  const systemPowerW = (decodePowerW + host.totalW) / Math.max(0.5, options.psuEfficiency);
   const wallPowerW = systemPowerW * options.pue;
   const wallJoulesPerToken = tokensPerSec > 0 ? wallPowerW / tokensPerSec : 0;
 
@@ -150,5 +163,6 @@ export function computeEnergy(
     decomposition,
     epsFlopPJ,
     epsMopPJ,
+    host,
   };
 }

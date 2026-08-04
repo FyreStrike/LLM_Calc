@@ -175,6 +175,46 @@ export interface KvQuantSpec {
 // Workload
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Host system
+// ---------------------------------------------------------------------------
+
+export interface RamTypeSpec {
+  id: string;
+  label: string;
+  /** Selectable transfer rates in MT/s. */
+  speeds: number[];
+  defaultSpeed: number;
+  /** Per-module draw while the bus is idle — paid whenever the machine is on. */
+  idleWattsPerModule: number;
+  /** Clock the measured active figure was taken at. */
+  referenceSpeedMTps: number;
+  /** Per-module draw at `referenceSpeedMTps` with the bus saturated. */
+  referenceActiveWatts: number;
+}
+
+export interface RamSpec {
+  typeId: string;
+  speedMTps: number;
+  channels: number;
+  /**
+   * Installed capacity. Drives both the offload feasibility check and, via
+   * `modules`, the idle power the machine pays continuously.
+   */
+  totalCapacityGb: number;
+  /** Number of physical modules — what idle power actually scales with. */
+  modules: number;
+}
+
+export interface HostSpec {
+  ram: RamSpec;
+  /**
+   * Everything else in the host: CPU at idle, board and VRM losses, drives,
+   * fans. RAM is excluded because it is costed separately.
+   */
+  baseOverheadW: number;
+}
+
 export type Runtime = 'vllm' | 'llamacpp' | 'transformers';
 
 export interface Workload {
@@ -304,6 +344,13 @@ export interface PerformanceResult {
   effectiveFlops: number;
   /** Fraction of weights served from host RAM rather than VRAM, 0..1. */
   offloadFraction: number;
+  /**
+   * Share of wall-clock time the host memory bus is saturated. Drives RAM
+   * power; zero when nothing is offloaded.
+   */
+  ramDutyCycle: number;
+  /** True when the weights that must spill exceed available host memory. */
+  offloadExceedsHostRam: boolean;
 }
 
 export interface EnergyResult {
@@ -325,6 +372,19 @@ export interface EnergyResult {
   };
   epsFlopPJ: number;
   epsMopPJ: number;
+  /**
+   * Host draw split into its parts, so the standing cost of installed memory
+   * is visible rather than buried in a single overhead figure.
+   */
+  host: {
+    /** CPU, board, drives, fans. */
+    baseW: number;
+    /** Paid for every installed module whether or not it is used. */
+    ramIdleW: number;
+    /** Extra draw while weights stream from host memory. */
+    ramActiveW: number;
+    totalW: number;
+  };
 }
 
 export interface CostResult {
@@ -351,6 +411,12 @@ export interface CalcInput {
   energy: EnergyOptions;
   cost: CostOptions;
   apiPrice?: ApiPrice;
+  /**
+   * Optional: when supplied, host RAM bandwidth, offload feasibility and
+   * memory power are derived from the actual specification rather than from
+   * `workload.hostRamBandwidthGBs` and `energy.hostOverheadW`.
+   */
+  host?: HostSpec;
 }
 
 export interface CalcResult {

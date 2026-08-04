@@ -1,5 +1,7 @@
+import { HOST_RAM_USABLE_FRACTION, getRamType } from '../data/ram';
 import { computeCost } from './cost';
 import { computeEnergy } from './energy';
+import { hostAvailableBytes, ramPower } from './host';
 import { computeMemory, GB, usableVramBytes } from './memory';
 import { computePerformance } from './performance';
 import { peakFlopsFor } from './roofline';
@@ -8,6 +10,7 @@ import type { CalcInput, CalcResult, Warning } from './types';
 export * from './types';
 export * from './quant';
 export * from './memory';
+export * from './host';
 export * from './roofline';
 export * from './performance';
 export * from './energy';
@@ -17,7 +20,8 @@ export * from './cost';
  * Run the full pipeline: memory -> fit -> performance -> energy -> cost.
  */
 export function runCalculation(input: CalcInput): CalcResult {
-  const { model, hardware, quant, kvQuant, workload, energy, cost, apiPrice } = input;
+  const { model, hardware, quant, kvQuant, workload, energy, cost, apiPrice, host } =
+    input;
 
   const memory = computeMemory(
     model,
@@ -34,6 +38,11 @@ export function runCalculation(input: CalcInput): CalcResult {
     hardware.gpu.unified,
   );
 
+  const hostRamType = host ? getRamType(host.ram.typeId) : undefined;
+  const hostAvailable = host
+    ? hostAvailableBytes(host.ram, HOST_RAM_USABLE_FRACTION)
+    : undefined;
+
   const performance = computePerformance(
     model,
     hardware,
@@ -42,9 +51,22 @@ export function runCalculation(input: CalcInput): CalcResult {
     workload,
     memory.totalBytes,
     usable,
+    hostAvailable,
   );
 
   const peakFlops = peakFlopsFor(hardware.gpu, quant.computePrecision);
+
+  // RAM power follows what the memory bus is actually doing: idle draw is paid
+  // for every installed module regardless, the active delta only while weights
+  // stream from host memory.
+  const hostPower =
+    host && hostRamType
+      ? (() => {
+          const p = ramPower(host.ram, hostRamType, performance.ramDutyCycle);
+          return { baseW: host.baseOverheadW, ramIdleW: p.idleW, ramActiveW: p.activeW };
+        })()
+      : undefined;
+
   const energyResult = computeEnergy(
     hardware.gpu,
     hardware.numGpus,
@@ -52,6 +74,7 @@ export function runCalculation(input: CalcInput): CalcResult {
     workload,
     energy,
     peakFlops,
+    hostPower,
   );
 
   const costResult = computeCost(energyResult, cost, apiPrice);
@@ -67,7 +90,7 @@ export function runCalculation(input: CalcInput): CalcResult {
     performance,
     energy: energyResult,
     cost: costResult,
-    warnings: collectWarnings(input, memory.totalBytes, usable, fits, performance.offloadFraction),
+    warnings: collectWarnings(input, memory.totalBytes, usable, fits, performance, hostAvailable),
   };
 }
 
@@ -76,10 +99,25 @@ function collectWarnings(
   totalBytes: number,
   usableBytes: number,
   fits: boolean,
-  offload: number,
+  performance: { offloadFraction: number; offloadExceedsHostRam: boolean },
+  hostAvailable: number | undefined,
 ): Warning[] {
-  const { model, hardware, quant, workload } = input;
+  const { model, hardware, quant, workload, host } = input;
+  const offload = performance.offloadFraction;
   const warnings: Warning[] = [];
+
+  // The spill is larger than host memory can hold. Reporting a throughput
+  // figure here would be meaningless — the OS would swap to disk.
+  if (performance.offloadExceedsHostRam && host && hostAvailable !== undefined) {
+    warnings.push({
+      level: 'error',
+      key: 'warn.offloadExceedsHostRam',
+      values: {
+        installed: host.ram.totalCapacityGb,
+        usable: (hostAvailable / GB).toFixed(0),
+      },
+    });
+  }
 
   if (!fits && offload === 0) {
     warnings.push({
@@ -135,6 +173,25 @@ function collectWarnings(
 
   if (workload.runtime === 'vllm') {
     warnings.push({ level: 'info', key: 'warn.vllmPreallocation' });
+  }
+
+  // Idle RAM draw scales with installed modules, not with what the model
+  // needs. A heavily populated server pays this around the clock, and on a
+  // small model it can rival the GPU's own decode draw.
+  if (host) {
+    const ramType = getRamType(host.ram.typeId);
+    const idleW = host.ram.modules * ramType.idleWattsPerModule;
+    if (idleW > 20) {
+      warnings.push({
+        level: 'info',
+        key: 'warn.ramIdleDominates',
+        values: {
+          watts: idleW.toFixed(0),
+          modules: host.ram.modules,
+          capacity: host.ram.totalCapacityGb,
+        },
+      });
+    }
   }
 
   return warnings;

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { EnergyCostPanel } from './components/EnergyCostPanel';
 import { HardwarePanel } from './components/HardwarePanel';
+import { HostPanel } from './components/HostPanel';
 import { ModelPanel } from './components/ModelPanel';
 import { Results } from './components/Results';
 import { WorkloadPanel } from './components/WorkloadPanel';
@@ -82,6 +83,7 @@ export default function App() {
           <div className="space-y-4 lg:sticky lg:top-[72px] lg:max-h-[calc(100vh-92px)] lg:overflow-y-auto lg:pr-1 lg:pb-4">
             <ModelPanel />
             <HardwarePanel />
+            <HostPanel />
             <WorkloadPanel />
             <EnergyCostPanel />
           </div>

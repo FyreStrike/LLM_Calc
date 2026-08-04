@@ -69,6 +69,43 @@ export function offloadFraction(
   return Math.min(1, overflow / weightsBytes);
 }
 
+export interface OffloadPlan {
+  fraction: number;
+  /** Set when the spill is larger than host memory can hold. */
+  exceedsHostRam: boolean;
+}
+
+/**
+ * Offload plan bounded by what host memory can actually hold.
+ *
+ * Without this bound the model happily reports a throughput figure for
+ * spilling 400 GB of weights into a 32 GB machine. That number is not merely
+ * optimistic, it is meaningless: the OS would swap to disk and throughput
+ * would collapse by orders of magnitude.
+ */
+export function planOffload(
+  totalBytes: number,
+  usableVramBytes: number,
+  weightsBytes: number,
+  allowOffload: boolean,
+  hostAvailableBytes: number | undefined,
+): OffloadPlan {
+  const wanted = offloadFraction(totalBytes, usableVramBytes, weightsBytes, allowOffload);
+  if (wanted === 0 || hostAvailableBytes === undefined) {
+    return { fraction: wanted, exceedsHostRam: false };
+  }
+
+  const wantedBytes = weightsBytes * wanted;
+  if (wantedBytes <= hostAvailableBytes) {
+    return { fraction: wanted, exceedsHostRam: false };
+  }
+
+  return {
+    fraction: Math.min(wanted, hostAvailableBytes / weightsBytes),
+    exceedsHostRam: true,
+  };
+}
+
 export function computePerformance(
   model: ModelSpec,
   hardware: HardwareConfig,
@@ -77,17 +114,20 @@ export function computePerformance(
   workload: Workload,
   memoryTotalBytes: number,
   usableBytes: number,
+  hostAvailableBytes?: number,
 ): PerformanceResult {
   const peakFlops = peakFlopsFor(hardware.gpu, quant.computePrecision);
   const eff = effectiveHardware(hardware, peakFlops, workload.mbu, workload.mfu);
 
   const weights = weightBytes(model, quant);
-  const offload = offloadFraction(
+  const plan = planOffload(
     memoryTotalBytes,
     usableBytes,
     weights,
     workload.allowOffload,
+    hostAvailableBytes,
   );
+  const offload = plan.fraction;
 
   const hostBytesPerSec = workload.hostRamBandwidthGBs * 1e9 * workload.mbu;
 
@@ -110,12 +150,16 @@ export function computePerformance(
   // half the throughput.
   const weightBytesOnHost = weightBytesRead * offload;
   const weightBytesOnGpu = weightBytesRead - weightBytesOnHost;
+  const hostSeconds = weightBytesOnHost / Math.max(1, hostBytesPerSec);
   const decodeMemorySeconds =
-    (weightBytesOnGpu + kvBytesRead) / eff.bytesPerSec +
-    weightBytesOnHost / Math.max(1, hostBytesPerSec);
+    (weightBytesOnGpu + kvBytesRead) / eff.bytesPerSec + hostSeconds;
 
   const decodeComputeSeconds = flopsPerDecodeStep / eff.flopsPerSec;
   const decodeStepSeconds = Math.max(decodeMemorySeconds, decodeComputeSeconds);
+
+  // Share of the step during which the host memory bus is saturated. This is
+  // what decides whether the DIMMs sit at idle draw or near their peak.
+  const ramDutyCycle = decodeStepSeconds > 0 ? hostSeconds / decodeStepSeconds : 0;
 
   const decodeTokensPerSecTotal =
     decodeStepSeconds > 0 ? workload.batchSize / decodeStepSeconds : 0;
@@ -162,5 +206,7 @@ export function computePerformance(
     effectiveBandwidthBytesPerSec: eff.bytesPerSec,
     effectiveFlops: eff.flopsPerSec,
     offloadFraction: offload,
+    ramDutyCycle,
+    offloadExceedsHostRam: plan.exceedsHostRam,
   };
 }

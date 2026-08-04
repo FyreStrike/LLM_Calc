@@ -75,21 +75,6 @@ export function WorkloadPanel() {
           help={t('workload.offloadHelp')}
         />
 
-        {state.allowOffload && (
-          <Field
-            label={t('workload.hostRam')}
-            hint={`${num(state.hostRamBandwidthGBs, language, 0)} GB/s`}
-          >
-            <Slider
-              value={state.hostRamBandwidthGBs}
-              onChange={(v) => state.set('hostRamBandwidthGBs', v)}
-              min={20}
-              max={800}
-              step={10}
-            />
-          </Field>
-        )}
-
         {state.advanced && (
           <div className="space-y-3 border-t border-[var(--border)] pt-3">
             <Field

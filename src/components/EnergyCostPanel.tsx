@@ -83,7 +83,7 @@ export function EnergyCostPanel() {
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3">
           <Field label={t('energy.pue')}>
             <Select
               value={String(state.pue)}
@@ -95,14 +95,6 @@ export function EnergyCostPanel() {
                 </option>
               ))}
             </Select>
-          </Field>
-          <Field label={`${t('energy.hostOverhead')} (W)`}>
-            <NumberInput
-              value={state.hostOverheadW}
-              onChange={(v) => state.set('hostOverheadW', v ?? 0)}
-              min={0}
-              step={10}
-            />
           </Field>
         </div>
 

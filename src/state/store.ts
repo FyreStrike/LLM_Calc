@@ -4,11 +4,13 @@ import type {
   ApiPrice,
   CalcInput,
   EnergyMode,
+  HostSpec,
   ModelSpec,
   Parallelism,
   Region,
   Runtime,
 } from '../core/types';
+import { ramBandwidthGBs } from '../core/host';
 import { getKvQuant, getQuant } from '../core/quant';
 import { API_PRICES, MODEL_TO_API_PRICE } from '../data/apiPrices';
 import { GPUS, getGpu } from '../data/gpus';
@@ -34,9 +36,17 @@ export interface AppState {
   runtime: Runtime;
   prefillChunkTokens: number;
   allowOffload: boolean;
-  hostRamBandwidthGBs: number;
   mbu: number;
   mfu: number;
+
+  // host system — RAM bandwidth and power are derived from these
+  hostPresetId: string;
+  ramTypeId: string;
+  ramSpeedMTps: number;
+  ramChannels: number;
+  ramCapacityGb: number;
+  ramModules: number;
+  hostBaseOverheadW: number;
 
   // energy
   energyMode: EnergyMode;
@@ -99,7 +109,14 @@ const DEFAULTS: AppState = {
   runtime: 'llamacpp',
   prefillChunkTokens: 2048,
   allowOffload: false,
-  hostRamBandwidthGBs: 90,
+
+  hostPresetId: 'desktop',
+  ramTypeId: 'ddr5',
+  ramSpeedMTps: 5600,
+  ramChannels: 2,
+  ramCapacityGb: 32,
+  ramModules: 2,
+  hostBaseOverheadW: 55,
   // Databricks measured ~60% MBU for batch-1 single-GPU decode; well-tuned
   // setups reach 70-90%. 0.70 is a defensible middle.
   mbu: 0.7,
@@ -212,10 +229,24 @@ export function effectiveRegion(state: AppState): Region {
   };
 }
 
+export function hostSpec(state: AppState): HostSpec {
+  return {
+    ram: {
+      typeId: state.ramTypeId,
+      speedMTps: state.ramSpeedMTps,
+      channels: state.ramChannels,
+      totalCapacityGb: state.ramCapacityGb,
+      modules: state.ramModules,
+    },
+    baseOverheadW: state.hostBaseOverheadW,
+  };
+}
+
 export function buildCalcInput(state: AppState): CalcInput {
   const model = selectedModel(state);
   const gpu = getGpu(state.gpuId) ?? GPUS[0];
   const region = effectiveRegion(state);
+  const host = hostSpec(state);
 
   return {
     model,
@@ -235,7 +266,8 @@ export function buildCalcInput(state: AppState): CalcInput {
       runtime: state.runtime,
       prefillChunkTokens: state.prefillChunkTokens,
       allowOffload: state.allowOffload,
-      hostRamBandwidthGBs: state.hostRamBandwidthGBs,
+      // Derived from the RAM specification rather than guessed at a slider.
+      hostRamBandwidthGBs: ramBandwidthGBs(host.ram),
       mbu: state.mbu,
       mfu: state.mfu,
     },
@@ -255,6 +287,7 @@ export function buildCalcInput(state: AppState): CalcInput {
       usdToCurrency: region.currency === 'USD' ? 1 : state.usdToCurrency,
     },
     apiPrice: selectedApiPrice(state),
+    host,
   };
 }
 
@@ -267,6 +300,8 @@ const SHARE_KEYS = [
   'modelId', 'gpuId', 'numGpus', 'parallelism', 'quantId', 'kvQuantId',
   'contextLength', 'promptTokens', 'outputTokens', 'batchSize', 'runtime',
   'allowOffload', 'mbu', 'mfu', 'energyMode', 'psuEfficiency', 'pue',
+  'hostPresetId', 'ramTypeId', 'ramSpeedMTps', 'ramChannels', 'ramCapacityGb',
+  'ramModules', 'hostBaseOverheadW',
   'hostOverheadW', 'regionId', 'customPricePerKWh', 'customGridIntensity',
   'inputRatio', 'hardwareCapex', 'dailyTokens', 'apiPriceId', 'advanced',
 ] as const satisfies readonly (keyof AppState)[];

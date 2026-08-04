@@ -12,7 +12,8 @@ export const en = {
 
   section: {
     model: 'Model',
-    hardware: 'Hardware',
+    hardware: 'GPU',
+    host: 'Host system',
     workload: 'Workload',
     energy: 'Energy',
     cost: 'Cost',
@@ -103,6 +104,27 @@ export const en = {
       appleBinning: 'Bandwidth depends on the GPU core count of the specific bin.',
       unverified: 'Specifications not independently verified.',
     },
+  },
+
+  host: {
+    preset: 'System type',
+    laptop: 'Laptop / mini PC',
+    desktop: 'Desktop',
+    workstation: 'Workstation',
+    server: 'Server (dual socket)',
+    ramType: 'Memory type',
+    ramSpeed: 'Speed',
+    channels: 'Channels',
+    capacity: 'Capacity',
+    modules: 'Modules',
+    modulesHelp: 'Drives idle power',
+    bandwidth: 'Bandwidth',
+    ramIdlePower: 'RAM idle',
+    ramFullPower: 'RAM saturated',
+    baseOverhead: 'Rest of system',
+    baseOverheadHelp: 'CPU at idle, board and VRM, drives, fans — excluding RAM, which is costed separately.',
+    idleDominatesNote:
+      '{{modules}} modules draw {{watts}} W continuously, regardless of how much memory the model actually needs. That standing load is in every single token.',
   },
 
   quant: {
@@ -248,6 +270,10 @@ export const en = {
       'Multiple GPUs without NVLink: PCIe all-reduce can consume 30-40% of step time under tensor parallelism.',
     vllmPreallocation:
       'vLLM preallocates gpu_memory_utilization (default 0.90) of total VRAM, so measured usage will look higher.',
+    offloadExceedsHostRam:
+      'The weights that must spill exceed available system memory ({{installed}} GB installed, about {{usable}} GB usable). The machine would swap to disk — the speed shown covers only the portion that still fits in RAM.',
+    ramIdleDominates:
+      '{{modules}} memory modules ({{capacity}} GB) draw about {{watts}} W continuously, independent of the model. On small models that standing load can rival the GPU’s own decode draw.',
   },
 
   region: {

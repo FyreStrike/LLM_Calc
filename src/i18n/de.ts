@@ -14,7 +14,8 @@ export const de: Translations = {
 
   section: {
     model: 'Modell',
-    hardware: 'Hardware',
+    hardware: 'GPU',
+    host: 'Host-System',
     workload: 'Arbeitslast',
     energy: 'Energie',
     cost: 'Kosten',
@@ -105,6 +106,27 @@ export const de: Translations = {
       appleBinning: 'Die Bandbreite hängt von der GPU-Kernanzahl des jeweiligen Bins ab.',
       unverified: 'Spezifikationen nicht unabhängig verifiziert.',
     },
+  },
+
+  host: {
+    preset: 'Systemtyp',
+    laptop: 'Laptop / Mini-PC',
+    desktop: 'Desktop',
+    workstation: 'Workstation',
+    server: 'Server (Dual-Socket)',
+    ramType: 'Speichertyp',
+    ramSpeed: 'Takt',
+    channels: 'Kanäle',
+    capacity: 'Kapazität',
+    modules: 'Module',
+    modulesHelp: 'Bestimmt die Leerlaufleistung',
+    bandwidth: 'Bandbreite',
+    ramIdlePower: 'RAM Leerlauf',
+    ramFullPower: 'RAM Volllast',
+    baseOverhead: 'Übrige Systemlast',
+    baseOverheadHelp: 'CPU im Leerlauf, Mainboard und VRM, Laufwerke, Lüfter — ohne RAM, der separat gerechnet wird.',
+    idleDominatesNote:
+      '{{modules}} Module ziehen dauerhaft {{watts}} W, unabhängig davon, wie viel Speicher das Modell tatsächlich braucht. Diese Grundlast steckt in jedem einzelnen Token.',
   },
 
   quant: {
@@ -250,6 +272,10 @@ export const de: Translations = {
       'Mehrere GPUs ohne NVLink: PCIe-All-Reduce kann bei Tensor-Parallelität 30–40 % der Schrittzeit verbrauchen.',
     vllmPreallocation:
       'vLLM allokiert gpu_memory_utilization (Standard 0,90) des gesamten VRAM vorab, daher wirkt die gemessene Belegung höher.',
+    offloadExceedsHostRam:
+      'Die auszulagernden Gewichte übersteigen den verfügbaren Arbeitsspeicher ({{installed}} GB verbaut, davon rund {{usable}} GB nutzbar). Das System würde auf die SSD auslagern — die angezeigte Geschwindigkeit gilt nur für den Anteil, der noch in den RAM passt.',
+    ramIdleDominates:
+      '{{modules}} Speichermodule ({{capacity}} GB) ziehen dauerhaft rund {{watts}} W, unabhängig vom Modell. Bei kleinen Modellen kann diese Grundlast die GPU-Leistungsaufnahme im Decode erreichen.',
   },
 
   region: {

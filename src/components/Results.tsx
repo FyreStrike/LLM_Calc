@@ -356,6 +356,7 @@ function EnergyCard({ result }: { result: CalcResult }) {
   const t = useT();
   const language = useLanguage((s) => s.language);
   const { energy } = result;
+  const ramDutyPct = result.performance.ramDutyCycle * 100;
   const d = energy.decomposition;
   const totalJ = d ? d.computeJoules + d.memoryJoules + d.staticJoules : 0;
 
@@ -371,12 +372,12 @@ function EnergyCard({ result }: { result: CalcResult }) {
     <Card title={t('section.energy')}>
       <div className="grid grid-cols-3 gap-4">
         <Stat
-          label={t('results.decode')}
+          label={`GPU · ${t('results.decode')}`}
           value={num(energy.decodePowerW, language, 0)}
           unit="W"
         />
         <Stat
-          label={t('results.prefill')}
+          label={`GPU · ${t('results.prefill')}`}
           value={num(energy.prefillPowerW, language, 0)}
           unit="W"
         />
@@ -385,6 +386,48 @@ function EnergyCard({ result }: { result: CalcResult }) {
           value={num(energy.wallPowerW, language, 0)}
           unit="W"
         />
+      </div>
+
+      {/* Host draw broken out, so the standing cost of installed memory is
+          visible rather than folded into one overhead number. */}
+      <div className="mt-4 border-t border-[var(--border)] pt-3.5">
+        <h3 className="mb-2 text-[11px] font-medium tracking-wide text-[var(--text-3)] uppercase">
+          {t('section.host')}
+        </h3>
+        <table className="w-full text-[12px]">
+          <tbody>
+            <tr>
+              <td className="py-1 text-[var(--text-2)]">{t('host.baseOverhead')}</td>
+              <td className="py-1 text-right font-semibold tabular-nums text-[var(--text)]">
+                {num(energy.host.baseW, language, 0)} W
+              </td>
+            </tr>
+            <tr>
+              <td className="py-1 text-[var(--text-2)]">{t('host.ramIdlePower')}</td>
+              <td className="py-1 text-right font-semibold tabular-nums text-[var(--text)]">
+                {num(energy.host.ramIdleW, language, 1)} W
+              </td>
+            </tr>
+            {energy.host.ramActiveW > 0.05 && (
+              <tr>
+                <td className="py-1 text-[var(--text-2)]">
+                  {t('host.ramFullPower')} ({num(ramDutyPct, language, 0)} %)
+                </td>
+                <td className="py-1 text-right font-semibold tabular-nums text-[var(--text)]">
+                  +{num(energy.host.ramActiveW, language, 1)} W
+                </td>
+              </tr>
+            )}
+            <tr className="border-t border-[var(--border)]">
+              <td className="py-1 font-medium text-[var(--text-2)]">
+                {t('energy.hostOverhead')}
+              </td>
+              <td className="py-1 text-right font-semibold tabular-nums text-[var(--text)]">
+                {num(energy.host.totalW, language, 0)} W
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
 
       {d && totalJ > 0 && (
