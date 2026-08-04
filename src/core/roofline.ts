@@ -66,16 +66,28 @@ export function parallelEfficiency(
   numGpus: number,
   parallelism: Parallelism,
   nvlink: boolean,
+  batchSize = 1,
 ): number {
   if (numGpus <= 1) return 1;
   const steps = Math.log2(numGpus);
 
   if (parallelism === 'pp') {
-    // Pipeline stages barely communicate, but a single sequence only ever
-    // occupies one stage — so this models throughput, not batch-1 latency.
-    return Math.max(0.1, 1 - 0.05 * steps);
+    // Pipeline parallelism does not aggregate bandwidth for one sequence: the
+    // token walks the stages in order, so only one GPU is working at a time
+    // and the others sit in the bubble. Utilisation is the classic GPipe
+    // fraction, microbatches over microbatches-plus-bubble:
+    //
+    //     eta = B / (B + N - 1)
+    //
+    // At B=1 over 8 stages that is 1/8, which cancels the 8x aggregation in
+    // `effectiveHardware` and correctly leaves a single GPU's bandwidth. The
+    // previous flat ~0.95 claimed an 8x speedup the hardware cannot deliver,
+    // contradicting this function's own documentation.
+    return Math.max(0.02, batchSize / (batchSize + numGpus - 1));
   }
 
+  // Tensor parallelism issues two all-reduces per layer, so it is bound by
+  // the interconnect rather than by scheduling.
   const penaltyPerDoubling = nvlink ? 0.05 : 0.2;
   return Math.max(0.1, 1 - penaltyPerDoubling * steps);
 }
@@ -96,9 +108,15 @@ export function effectiveHardware(
   peakFlops: number,
   mbu: number,
   mfu: number,
+  batchSize = 1,
 ): EffectiveHardware {
   const nvlink = hardware.nvlink ?? hardware.gpu.nvlink ?? false;
-  const efficiency = parallelEfficiency(hardware.numGpus, hardware.parallelism, nvlink);
+  const efficiency = parallelEfficiency(
+    hardware.numGpus,
+    hardware.parallelism,
+    nvlink,
+    batchSize,
+  );
 
   const bytesPerSec =
     hardware.gpu.bandwidthGBs * 1e9 * hardware.numGpus * efficiency * mbu;

@@ -223,3 +223,58 @@ describe('share link round-trip', () => {
     expect(restored.numGpus).toBeUndefined();
   });
 });
+
+describe('share link validation', () => {
+  // A link is untrusted input. Without bounds it could load a negative batch
+  // size or a PUE of -5 and produce nonsense that looks like a real result.
+  it('rejects negative values outright', () => {
+    const r = queryToState(
+      'batchSize=-8&numGpus=-1&contextLength=-4096&pue=-5&customPricePerKWh=-0.4',
+    );
+    expect(r.batchSize).toBeUndefined();
+    expect(r.numGpus).toBeUndefined();
+    expect(r.contextLength).toBeUndefined();
+    expect(r.pue).toBeUndefined();
+    expect(r.customPricePerKWh).toBeUndefined();
+  });
+
+  it('rejects absurdly large values', () => {
+    const r = queryToState('numGpus=999999&batchSize=1e12&ramModules=100000');
+    expect(r.numGpus).toBeUndefined();
+    expect(r.batchSize).toBeUndefined();
+    expect(r.ramModules).toBeUndefined();
+  });
+
+  it('keeps fractions inside their natural range', () => {
+    expect(queryToState('mbu=1.5').mbu).toBeUndefined();
+    expect(queryToState('inputRatio=2').inputRatio).toBeUndefined();
+    expect(queryToState('psuEfficiency=0.1').psuEfficiency).toBeUndefined();
+    expect(queryToState('mbu=0.8').mbu).toBe(0.8);
+  });
+
+  it('drops rather than clamps, so a link never silently means something else', () => {
+    // Clamping 10000 GPUs to 1024 would show a configuration nobody shared.
+    const r = queryToState('numGpus=10000&batchSize=4');
+    expect(r.numGpus).toBeUndefined();
+    expect(r.batchSize).toBe(4);
+  });
+
+  it('rejects ids that do not resolve to real hardware', () => {
+    expect(queryToState('gpuId=totally-made-up').gpuId).toBeUndefined();
+    expect(queryToState('regionId=atlantis').regionId).toBeUndefined();
+    expect(queryToState('gpuId=h100-sxm').gpuId).toBe('h100-sxm');
+  });
+
+  it('still accepts a legitimate link unchanged', () => {
+    const state = base({
+      gpuId: 'h100-sxm', numGpus: 8, batchSize: 32, contextLength: 32768,
+      pue: 1.54, customPricePerKWh: 0.22,
+    });
+    const r = queryToState(stateToQuery(state));
+    expect(r.gpuId).toBe('h100-sxm');
+    expect(r.numGpus).toBe(8);
+    expect(r.batchSize).toBe(32);
+    expect(r.pue).toBe(1.54);
+    expect(r.customPricePerKWh).toBe(0.22);
+  });
+});

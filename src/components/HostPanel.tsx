@@ -5,7 +5,7 @@ import { useLanguage, useT } from '../i18n';
 import { GPUS, getGpu } from '../data/gpus';
 import { hostComponents, hostSpec, isSocPlatform, useStore } from '../state/store';
 import { num } from '../ui/format';
-import { Button, Card, Field, NumberInput, Note, Select } from '../ui/primitives';
+import { Card, Field, NumberInput, Note, Select } from '../ui/primitives';
 
 const CPU_SEGMENTS = ['mobile', 'desktop', 'workstation', 'server'] as const;
 
@@ -282,4 +282,3 @@ export function HostPanel() {
   );
 }
 
-export { Button };

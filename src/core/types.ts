@@ -398,6 +398,13 @@ export interface PerformanceResult {
   /** FLOPs per decode step (whole batch). */
   flopsPerDecodeStep: number;
   prefillFlops: number;
+  /**
+   * Bytes crossing the memory bus during prefill: the weight set read once,
+   * plus the KV cache written for the prompt. Distinct from the decode
+   * figure — reusing that one made prefill energy wrong by orders of
+   * magnitude at long prompts.
+   */
+  prefillBytesMoved: number;
   /** Arithmetic intensity of the decode phase, FLOP/byte. */
   decodeIntensity: number;
   /** Arithmetic intensity of the prefill phase, FLOP/byte. */

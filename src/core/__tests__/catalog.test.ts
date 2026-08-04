@@ -3,7 +3,13 @@ import { API_PRICES, MODEL_TO_API_PRICE } from '../../data/apiPrices';
 import { GPUS } from '../../data/gpus';
 import { getModel, MODELS } from '../../data/models';
 import { REGIONS } from '../../data/regions';
-import { GB, kvBytesPerToken, kvCacheBytes, usableVramBytes } from '../memory';
+import {
+  GB,
+  kvBytesPerToken,
+  kvCacheBytes,
+  linearAttentionStateBytes,
+  usableVramBytes,
+} from '../memory';
 import { QUANTIZATIONS, getKvQuant } from '../quant';
 
 const kvFp16 = getKvQuant('fp16');
@@ -110,6 +116,33 @@ describe('hybrid linear attention', () => {
       1,
     );
     expect(hybrid / asIfAllLayersCached).toBeCloseTo(0.25, 2);
+  });
+
+  it('charges the recurrent state that linear layers still carry', () => {
+    // Linear attention grows no cache, but its matrix-valued state is not
+    // free. Reducing the growing term without adding this one understated
+    // hybrid models, badly so at large batch.
+    const m = getModel('qwen3.6-35b-a3b')!;
+    const state = linearAttentionStateBytes(m, kvFp16, 1);
+    expect(state).toBeGreaterThan(0);
+
+    // Constant in sequence length...
+    expect(linearAttentionStateBytes(m, kvFp16, 1)).toBe(state);
+    // ...but linear in batch.
+    expect(linearAttentionStateBytes(m, kvFp16, 32)).toBeCloseTo(state * 32, 0);
+  });
+
+  it('adds no recurrent state to a purely softmax model', () => {
+    expect(linearAttentionStateBytes(getModel('llama-3.1-8b')!, kvFp16, 8)).toBe(0);
+  });
+
+  it('makes the recurrent state visible in the total at large batch', () => {
+    const m = getModel('qwen3.6-35b-a3b')!;
+    const withState = kvCacheBytes(m, kvFp16, 1024, 64);
+    const withoutState = kvCacheBytes({ ...m, kvCacheLayerRatio: undefined }, kvFp16, 1024, 64);
+    // Even though the hybrid caches on a quarter of the layers, the state
+    // keeps it from being a clean quarter of the dense figure.
+    expect(withState).toBeGreaterThan(withoutState * 0.25);
   });
 
   it('applies the same treatment to every hybrid model in the catalog', () => {

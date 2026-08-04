@@ -443,6 +443,12 @@ stillschweigend als dense.
 8. **ε-Koeffizienten.** Aus TDP und Spitzenleistung abgeleitet, **nicht** gegen
    reale Messungen kalibriert. Das ist der offensichtliche nächste Schritt: die
    Werte lassen sich direkt aus NVML-Messreihen von `power_monitor.py` bestimmen.
+9. **Pipeline-Parallelismus.** Modelliert über den GPipe-Blasenanteil
+   $B/(B+N-1)$. Das erfasst die Auslastung korrekt, nicht aber
+   Aktivierungstransfers zwischen den Stufen oder ungleich geschnittene Stufen.
+10. **Rekurrenter Zustand linearer Attention.** Als
+    $n_{\text{kv}} \cdot d_{\text{head}}^2$ pro Layer angenähert. Die exakte
+    Zustandsform ist architekturspezifisch und nicht einheitlich publiziert.
 
 ---
 
@@ -452,7 +458,17 @@ stillschweigend als dense.
 npm run test
 ```
 
-197 Tests in `src/core/__tests__/` prüfen jede Formel gegen von Hand berechnete
+> **Grundsätzliche Einschränkung.** Die Testsuite prüft Formeln, Invarianten und
+> Plausibilitätsbereiche — sie ersetzt **keine Gegenprüfung gegen reale
+> Messungen**. Kein Wert dieses Rechners wurde bisher gegen llama.cpp oder vLLM
+> auf echter Hardware über mehrere GPUs validiert. Die Speicherformeln sind
+> Arithmetik und sollten tragen; Geschwindigkeit, Leistungsaufnahme und Kühlung
+> beruhen dagegen auf Auslastungsfaktoren (MBU, MFU), geschätzten
+> CPU-Leerlaufwerten und angepassten Gehäusekoeffizienten. Absolutwerte sind
+> Schätzungen, relative Vergleiche belastbarer. Das Schließen dieser Lücke ist
+> der naheliegendste nächste Schritt.
+
+Die Tests in `src/core/__tests__/` prüfen jede Formel gegen von Hand berechnete
 Referenzwerte. Die inhaltlich wichtigsten:
 
 * Llama-3.1-8B Q4_K_M ⇒ 4,58 GB Gewichte (deckungsgleich mit llama.cpp)

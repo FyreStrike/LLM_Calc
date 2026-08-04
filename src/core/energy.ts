@@ -122,7 +122,9 @@ export function computeEnergy(
 
     const prefillJoules =
       (epsFlopPJ * 1e-12) * performance.prefillFlops +
-      (epsMopPJ * 1e-12) * performance.bytesPerDecodeStep +
+      // Prefill moves its own byte volume — weights read once plus the KV
+      // written for the prompt — not the decode step's.
+      (epsMopPJ * 1e-12) * performance.prefillBytesMoved +
       idleW * numGpus * ttftSeconds;
     prefillPowerW = ttftSeconds > 0 ? prefillJoules / ttftSeconds : idleW;
 

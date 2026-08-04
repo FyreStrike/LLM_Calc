@@ -1,5 +1,5 @@
 import { GB, runtimeContextLabelKey } from '../core/memory';
-import type { CalcResult, ModelSpec, Vendor, Warning } from '../core/types';
+import type { CalcResult, Vendor, Warning } from '../core/types';
 import { getGpu, GPUS } from '../data/gpus';
 import { useLanguage, useT } from '../i18n';
 import { selectedModel, useStore } from '../state/store';
@@ -702,4 +702,3 @@ function Warnings({ warnings }: { warnings: Warning[] }) {
   );
 }
 
-export type { ModelSpec };

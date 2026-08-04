@@ -113,6 +113,32 @@ export function kvBytesPerToken(model: ModelSpec, kvQuant: KvQuantSpec): number 
  * remainder dominates — so the layer ratio is not a detail that can be
  * rounded away.
  */
+/**
+ * Fixed recurrent state carried by linear-attention layers.
+ *
+ * These layers do not grow a KV cache, but they are not free either: Gated
+ * DeltaNet and KDA keep a matrix-valued state of roughly
+ * `n_kv_heads x head_dim^2` per layer per sequence, constant in sequence
+ * length. Reducing the growing term without adding this one understated
+ * hybrid models — modestly at short context, and by hundreds of megabytes at
+ * large batch.
+ *
+ * The exact state shape is architecture-specific and not published uniformly,
+ * so this is an approximation flagged as such rather than an exact figure.
+ */
+export function linearAttentionStateBytes(
+  model: ModelSpec,
+  kvQuant: KvQuantSpec,
+  batchSize: number,
+): number {
+  const ratio = model.kvCacheLayerRatio;
+  if (ratio === undefined || ratio >= 1) return 0;
+
+  const linearLayers = model.numLayers * (1 - ratio);
+  const perLayer = model.numKeyValueHeads * model.headDim * model.headDim;
+  return perLayer * linearLayers * batchSize * kvQuant.bytesPerElement;
+}
+
 export function kvCacheBytes(
   model: ModelSpec,
   kvQuant: KvQuantSpec,
@@ -120,9 +146,11 @@ export function kvCacheBytes(
   batchSize: number,
 ): number {
   const perTokenAllLayers = kvBytesPerToken(model, kvQuant);
+  // Linear-attention layers contribute a constant state instead of a cache.
+  const recurrentState = linearAttentionStateBytes(model, kvQuant, batchSize);
 
   if (!model.slidingWindow) {
-    return perTokenAllLayers * contextLength * batchSize;
+    return perTokenAllLayers * contextLength * batchSize + recurrentState;
   }
 
   // Distribute across the layers that actually cache, not all layers.
@@ -137,8 +165,9 @@ export function kvCacheBytes(
 
   return (
     (windowedLayers * windowedContext + globalLayers * contextLength) *
-    perTokenPerLayer *
-    batchSize
+      perTokenPerLayer *
+      batchSize +
+    recurrentState
   );
 }
 

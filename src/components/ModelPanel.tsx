@@ -3,7 +3,7 @@ import type { ModelSpec } from '../core/types';
 import { MODELS } from '../data/models';
 import { useLanguage, useT } from '../i18n';
 import { HfImportError, importFromHuggingFace } from '../services/hfConfig';
-import { allModels, selectedModel, useStore } from '../state/store';
+import { selectedModel, useStore } from '../state/store';
 import { params } from '../ui/format';
 import {
   Badge,
@@ -321,4 +321,3 @@ function CustomModelForm({ onDone }: { onDone: () => void }) {
   );
 }
 
-export { allModels };

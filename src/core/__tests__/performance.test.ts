@@ -186,6 +186,45 @@ describe('decode speed', () => {
   });
 });
 
+describe('prefill byte volume', () => {
+  it('is tracked separately from the decode step', () => {
+    // Prefill energy used to be charged the decode step's byte count, which
+    // is wrong by orders of magnitude at a long prompt.
+    const r = runCalculation(
+      makeInput(llama8b, h100, { workload: { ...workload, promptTokens: 65536 } }),
+    );
+    expect(r.performance.prefillBytesMoved).not.toBe(r.performance.bytesPerDecodeStep);
+    expect(r.performance.prefillBytesMoved).toBeGreaterThan(0);
+  });
+
+  it('covers the weight set plus the KV written for the prompt', () => {
+    const short = runCalculation(
+      makeInput(llama8b, h100, { workload: { ...workload, promptTokens: 1024 } }),
+    );
+    const long = runCalculation(
+      makeInput(llama8b, h100, { workload: { ...workload, promptTokens: 65536 } }),
+    );
+    // Weights are read once either way; the KV term grows with the prompt.
+    expect(long.performance.prefillBytesMoved).toBeGreaterThan(
+      short.performance.prefillBytesMoved,
+    );
+    expect(short.performance.prefillBytesMoved).toBeGreaterThan(
+      short.memory.weightsBytes * 0.9,
+    );
+  });
+
+  it('feeds prefill power rather than the decode figure', () => {
+    const r = runCalculation(
+      makeInput(llama8b, h100, {
+        workload: { ...workload, promptTokens: 65536 },
+        energy: { mode: 'roofline', psuEfficiency: 0.9, pue: 1, hostOverheadW: 80 },
+      }),
+    );
+    expect(r.energy.prefillPowerW).toBeGreaterThan(0);
+    expect(r.energy.prefillPowerW).toBeLessThanOrEqual(h100.tdpW);
+  });
+});
+
 describe('prefill', () => {
   it('is compute-bound', () => {
     const r = runCalculation(makeInput(llama8b, h100));
@@ -245,6 +284,48 @@ describe('fit and offload', () => {
     expect(offloaded.performance.offloadFraction).toBeGreaterThan(0);
     expect(offloaded.performance.decodeTokensPerSecPerSequence).toBeLessThan(
       onGpu.performance.decodeTokensPerSecPerSequence,
+    );
+  });
+});
+
+describe('pipeline parallelism', () => {
+  it('REGRESSION: does not aggregate bandwidth for a single sequence', () => {
+    // A token walks the stages in order, so only one GPU works at a time.
+    // The old flat ~0.95 claimed an 8x speedup the hardware cannot deliver,
+    // contradicting the function's own documentation.
+    const one = runCalculation(makeInput(llama8b, h100));
+    const pp8 = runCalculation(
+      makeInput(llama8b, h100, {
+        hardware: { gpu: h100, numGpus: 8, parallelism: 'pp' },
+      }),
+    );
+
+    const speedup =
+      pp8.performance.decodeTokensPerSecPerSequence /
+      one.performance.decodeTokensPerSecPerSequence;
+    expect(speedup).toBeLessThan(1.2);
+  });
+
+  it('fills the pipeline once there are enough microbatches', () => {
+    const batch1 = parallelEfficiency(8, 'pp', false, 1);
+    const batch8 = parallelEfficiency(8, 'pp', false, 8);
+    const batch64 = parallelEfficiency(8, 'pp', false, 64);
+
+    // GPipe bubble fraction B / (B + N - 1).
+    expect(batch1).toBeCloseTo(1 / 8, 4);
+    expect(batch8).toBeCloseTo(8 / 15, 4);
+    expect(batch64).toBeCloseTo(64 / 71, 4);
+    expect(batch64).toBeGreaterThan(batch8);
+  });
+
+  it('has no bubble on a single GPU', () => {
+    expect(parallelEfficiency(1, 'pp', false, 1)).toBe(1);
+  });
+
+  it('lets tensor parallelism beat pipeline at batch 1', () => {
+    // TP splits each layer, so it does aggregate bandwidth for one sequence.
+    expect(parallelEfficiency(8, 'tp', true, 1)).toBeGreaterThan(
+      parallelEfficiency(8, 'pp', true, 1),
     );
   });
 });

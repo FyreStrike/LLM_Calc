@@ -117,7 +117,13 @@ export function computePerformance(
   hostAvailableBytes?: number,
 ): PerformanceResult {
   const peakFlops = peakFlopsFor(hardware.gpu, quant.computePrecision);
-  const eff = effectiveHardware(hardware, peakFlops, workload.mbu, workload.mfu);
+  const eff = effectiveHardware(
+    hardware,
+    peakFlops,
+    workload.mbu,
+    workload.mfu,
+    workload.batchSize,
+  );
 
   const weights = weightBytes(model, quant);
   const plan = planOffload(
@@ -176,6 +182,9 @@ export function computePerformance(
 
   // Prefill touches every expert, so the full weight set streams in.
   const prefillWeightBytes = weights;
+  // Plus the KV cache written for the whole prompt.
+  const prefillKvBytes = kvCacheBytes(model, kvQuant, t, workload.batchSize);
+  const prefillBytesMoved = prefillWeightBytes + prefillKvBytes;
   const prefillMemorySeconds =
     (prefillWeightBytes * (1 - offload)) / eff.bytesPerSec +
     (prefillWeightBytes * offload) / Math.max(1, hostBytesPerSec);
@@ -198,6 +207,7 @@ export function computePerformance(
     bytesPerDecodeStep,
     flopsPerDecodeStep,
     prefillFlops,
+    prefillBytesMoved,
     decodeIntensity,
     prefillIntensity,
     ridgePoint: ridge,

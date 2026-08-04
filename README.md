@@ -1,5 +1,11 @@
 # LLM Inference Calculator
 
+[![CI](https://github.com/FyreStrike/LLM_Calc/actions/workflows/ci.yml/badge.svg)](https://github.com/FyreStrike/LLM_Calc/actions/workflows/ci.yml)
+[![Deploy](https://github.com/FyreStrike/LLM_Calc/actions/workflows/deploy.yml/badge.svg)](https://github.com/FyreStrike/LLM_Calc/actions/workflows/deploy.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+**Live: https://fyrestrike.github.io/LLM_Calc/**
+
 VRAM, speed, energy and cost for local LLM inference — with an instant
 comparison against what the same tokens would cost via an API.
 
@@ -61,7 +67,7 @@ src/
     performance.ts  decode · prefill · MoE expert union · offload
     energy.ts       simple heuristic + E = ε_flop·W + ε_mop·Q + π₀·T
     cost.ts         local vs API, break-even, CO₂
-    __tests__/      128 tests against hand-computed reference values
+    __tests__/      unit tests against hand-computed reference values
   data/         model catalog (generated), GPU specs, quantization table, prices
   services/     HuggingFace config import, OpenRouter price fetch
   components/   input panels and result cards
@@ -82,6 +88,28 @@ knowing up front:
 - **MLA is detected structurally.** DeepSeek-V3's config reports 128 KV heads,
   which reads as full MHA; applying the GQA formula there overstates the KV cache
   by 57×. Classification keys off `kv_lora_rank`, never the head counts.
+
+### What the tests do and do not establish
+
+The suite checks formulas against hand-computed values, pins invariants, and
+guards regressions — Llama-3.1-8B's KV cache is exactly 131 072 bytes/token,
+DeepSeek-V3's exactly 70 272, the H100 FP16 ridge point 295.2 FLOP/byte.
+
+**It does not validate against real measurements.** No figure here has been
+compared with llama.cpp or vLLM running on actual hardware across several GPUs.
+The memory formulas are arithmetic and should hold; the speed, power and cooling
+models rest on utilisation factors (MBU, MFU), estimated CPU idle draw and
+fitted chassis coefficients that are plausible and sourced but unverified. Treat
+absolute numbers as estimates and relative comparisons as the more trustworthy
+output.
+
+Closing that gap — profiling a handful of configurations and fitting the
+coefficients to the results — is the obvious next step and the one that would
+most improve the tool.
+
+## License
+
+[MIT](LICENSE).
 
 ## Context
 

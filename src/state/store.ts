@@ -403,6 +403,69 @@ const NULLABLE_NUMBER_KEYS = new Set<keyof AppState>([
   'epsMopPJ',
 ]);
 
+/**
+ * Accepted range per numeric key. A shared link is untrusted input: without
+ * bounds it could load a negative batch size or a PUE of -5 and produce
+ * nonsense that looks like a real result.
+ */
+const NUMERIC_BOUNDS: Partial<Record<keyof AppState, [number, number]>> = {
+  numGpus: [1, 1024],
+  contextLength: [1, 16_777_216],
+  promptTokens: [1, 16_777_216],
+  outputTokens: [1, 1_048_576],
+  batchSize: [1, 8192],
+  mbu: [0.01, 1],
+  mfu: [0.01, 1],
+  psuEfficiency: [0.5, 1],
+  pue: [1, 5],
+  hostOverheadW: [0, 100_000],
+  hostBaseOverheadOverrideW: [0, 100_000],
+  inputRatio: [0, 1],
+  hardwareCapex: [0, 1e9],
+  dailyTokens: [0, 1e15],
+  customPricePerKWh: [0, 100],
+  customGridIntensity: [0, 2000],
+  customApiInputPerMTokUsd: [0, 10_000],
+  customApiOutputPerMTokUsd: [0, 10_000],
+  ramSpeedMTps: [100, 100_000],
+  ramChannels: [1, 64],
+  ramCapacityGb: [1, 65_536],
+  ramModules: [1, 128],
+  cpuSockets: [1, 16],
+  driveCount: [0, 256],
+  epsFlopPJ: [0, 1e6],
+  epsMopPJ: [0, 1e6],
+};
+
+/** Ids are only accepted if they resolve to something that actually exists. */
+function isKnownId(key: keyof AppState, value: string): boolean {
+  switch (key) {
+    case 'modelId':
+      // Custom models live in persisted state, so unknown ids are tolerated
+      // here and fall back at selection time.
+      return true;
+    case 'gpuId':
+      return GPUS.some((g) => g.id === value);
+    case 'regionId':
+      return REGIONS.some((r) => r.id === value);
+    case 'quantId':
+    case 'kvQuantId':
+    case 'runtime':
+    case 'parallelism':
+    case 'energyMode':
+    case 'apiPriceId':
+    case 'hostPresetId':
+    case 'ramTypeId':
+    case 'cpuId':
+    case 'boardId':
+    case 'coolingId':
+    case 'driveId':
+      return value.length > 0 && value.length < 128;
+    default:
+      return true;
+  }
+}
+
 export function queryToState(query: string): Partial<AppState> {
   const params = new URLSearchParams(query);
   const out: Record<string, unknown> = {};
@@ -414,10 +477,17 @@ export function queryToState(query: string): Partial<AppState> {
     const fallback = DEFAULTS[key];
     if (typeof fallback === 'number' || NULLABLE_NUMBER_KEYS.has(key)) {
       const n = Number(raw);
-      if (Number.isFinite(n)) out[key] = n;
+      if (!Number.isFinite(n)) continue;
+
+      const bounds = NUMERIC_BOUNDS[key];
+      // Out-of-range values are dropped rather than clamped: silently
+      // substituting a different number would misrepresent the shared link.
+      if (bounds && (n < bounds[0] || n > bounds[1])) continue;
+
+      out[key] = n;
     } else if (typeof fallback === 'boolean') {
       out[key] = raw === 'true';
-    } else {
+    } else if (isKnownId(key, raw)) {
       out[key] = raw;
     }
   }
