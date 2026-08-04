@@ -428,6 +428,19 @@ function EnergyCard({ result }: { result: CalcResult }) {
                 </td>
               </tr>
             )}
+            {energy.host.coolingW > 0 && (
+              <tr>
+                <td className="py-1 text-[var(--text-2)]">
+                  {t('host.cooling')}
+                  <span className="ml-1 text-[var(--text-3)]">
+                    ({num(energy.host.heatLoadW, language, 0)} W {t('host.heatLoad')})
+                  </span>
+                </td>
+                <td className="py-1 text-right font-semibold tabular-nums text-[var(--text)]">
+                  {num(energy.host.coolingW, language, 0)} W
+                </td>
+              </tr>
+            )}
             <tr className="border-t border-[var(--border)]">
               <td className="py-1 font-medium text-[var(--text-2)]">
                 {t('energy.hostOverhead')}

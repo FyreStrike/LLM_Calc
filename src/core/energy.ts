@@ -1,4 +1,6 @@
+import { coolingPowerW } from './host';
 import type {
+  CoolingSpec,
   EnergyOptions,
   EnergyResult,
   GpuSpec,
@@ -88,7 +90,13 @@ export function computeEnergy(
    * Host draw split into its parts. When absent, `options.hostOverheadW` is
    * used as a single undifferentiated figure.
    */
-  hostPower?: { baseW: number; ramIdleW: number; ramActiveW: number },
+  hostPower?: {
+    baseW: number;
+    ramIdleW: number;
+    ramActiveW: number;
+    /** Chassis cooling, applied to the heat the system actually dissipates. */
+    cooling?: CoolingSpec;
+  },
 ): EnergyResult {
   const idleW = options.idleW ?? gpu.idleW;
   const epsFlopPJ = options.epsFlopPJ ?? defaultEpsFlopPJ(gpu, peakFlops);
@@ -138,14 +146,35 @@ export function computeEnergy(
   // Wall-plug energy: the GPU is only part of what the meter sees. The host
   // draws power too, the PSU wastes some, and a datacenter multiplies the
   // whole thing by its PUE.
-  const host = hostPower
-    ? {
-        baseW: hostPower.baseW,
-        ramIdleW: hostPower.ramIdleW,
-        ramActiveW: hostPower.ramActiveW,
-        totalW: hostPower.baseW + hostPower.ramIdleW + hostPower.ramActiveW,
-      }
-    : { baseW: options.hostOverheadW, ramIdleW: 0, ramActiveW: 0, totalW: options.hostOverheadW };
+  let host: EnergyResult['host'];
+  if (hostPower) {
+    // Everything dissipating heat inside the chassis. Fan power is excluded
+    // from its own input to avoid a circular definition; it is exhausted
+    // rather than reheating the intake, so the omission is second order.
+    const heatLoadW =
+      decodePowerW + hostPower.baseW + hostPower.ramIdleW + hostPower.ramActiveW;
+    const coolingW = hostPower.cooling
+      ? coolingPowerW(hostPower.cooling, heatLoadW)
+      : 0;
+
+    host = {
+      baseW: hostPower.baseW,
+      ramIdleW: hostPower.ramIdleW,
+      ramActiveW: hostPower.ramActiveW,
+      coolingW,
+      heatLoadW,
+      totalW: hostPower.baseW + hostPower.ramIdleW + hostPower.ramActiveW + coolingW,
+    };
+  } else {
+    host = {
+      baseW: options.hostOverheadW,
+      ramIdleW: 0,
+      ramActiveW: 0,
+      coolingW: 0,
+      heatLoadW: decodePowerW + options.hostOverheadW,
+      totalW: options.hostOverheadW,
+    };
+  }
 
   const systemPowerW = (decodePowerW + host.totalW) / Math.max(0.5, options.psuEfficiency);
   const wallPowerW = systemPowerW * options.pue;

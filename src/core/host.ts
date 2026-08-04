@@ -1,5 +1,5 @@
 import { GB } from './memory';
-import type { HostComponents, RamSpec, RamTypeSpec } from './types';
+import type { CoolingSpec, HostComponents, RamSpec, RamTypeSpec } from './types';
 
 /**
  * Host system model: memory bandwidth, capacity and power.
@@ -25,9 +25,25 @@ import type { HostComponents, RamSpec, RamTypeSpec } from './types';
  * that has nothing to do with the model being served.
  */
 export function hostBaseOverheadW(c: HostComponents): number {
-  return (
-    c.cpuIdleW * Math.max(1, c.sockets) + c.boardW + c.coolingW + c.drivesW
-  );
+  return c.cpuIdleW * Math.max(1, c.sockets) + c.boardW + c.drivesW;
+}
+
+/**
+ * Fan power for the heat actually being removed.
+ *
+ * Cooling is not a property of the chassis alone — it is a property of the
+ * chassis *and* the load. Eight H100s in a 4U dissipate an order of magnitude
+ * more than an empty one, and the fans respond accordingly. Modelling it as a
+ * constant per chassis understates a GPU server badly and overstates an idle
+ * one.
+ *
+ * The heat load passed in should be the sustained operating point, not peak
+ * TDP: fans have thermal inertia and track the steady state. During
+ * memory-bound decode a GPU runs well below its rating, so its cooling cost is
+ * correspondingly lower than a training workload's.
+ */
+export function coolingPowerW(spec: CoolingSpec, heatLoadW: number): number {
+  return Math.max(spec.idleFloorW, Math.max(0, heatLoadW) * spec.heatFractionOfLoad);
 }
 
 /** Peak theoretical bandwidth of the memory subsystem, in bytes per second. */

@@ -64,7 +64,12 @@ export function runCalculation(input: CalcInput): CalcResult {
     host && hostRamType
       ? (() => {
           const p = ramPower(host.ram, hostRamType, performance.ramDutyCycle);
-          return { baseW: host.baseOverheadW, ramIdleW: p.idleW, ramActiveW: p.activeW };
+          return {
+            baseW: host.baseOverheadW,
+            ramIdleW: p.idleW,
+            ramActiveW: p.activeW,
+            cooling: host.cooling,
+          };
         })()
       : undefined;
 

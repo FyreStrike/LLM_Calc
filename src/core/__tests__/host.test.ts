@@ -3,6 +3,7 @@ import { getBoard, getCooling, getCpu, getDrive } from '../../data/cpu';
 import { getRamType, HOST_RAM_USABLE_FRACTION } from '../../data/ram';
 import {
   activeWattsPerModule,
+  coolingPowerW,
   hostAvailableBytes,
   hostBaseOverheadW,
   ramBandwidthGBs,
@@ -115,41 +116,74 @@ describe('memory power', () => {
 });
 
 describe('host component build-up', () => {
-  const desktop = {
-    cpuIdleW: 15, sockets: 1, boardW: 20, coolingW: 8, drivesW: 2,
-  };
+  const desktop = { cpuIdleW: 15, sockets: 1, boardW: 20, drivesW: 2 };
 
-  it('sums the components', () => {
-    expect(hostBaseOverheadW(desktop)).toBe(45);
+  it('sums the load-independent components', () => {
+    expect(hostBaseOverheadW(desktop)).toBe(37);
   });
 
   it('multiplies CPU idle by socket count', () => {
     // The reason a flat 55 W cannot describe a dual-socket machine.
-    const dualXeon = { cpuIdleW: 85, sockets: 2, boardW: 55, coolingW: 65, drivesW: 8 };
-    expect(hostBaseOverheadW(dualXeon)).toBe(85 * 2 + 55 + 65 + 8);
-    expect(hostBaseOverheadW(dualXeon)).toBeGreaterThan(hostBaseOverheadW(desktop) * 6);
+    const dualXeon = { cpuIdleW: 85, sockets: 2, boardW: 55, drivesW: 8 };
+    expect(hostBaseOverheadW(dualXeon)).toBe(85 * 2 + 55 + 8);
+    expect(hostBaseOverheadW(dualXeon)).toBeGreaterThan(hostBaseOverheadW(desktop) * 5);
   });
 
   it('puts a dual-socket server far above any desktop figure', () => {
     const dual = hostBaseOverheadW({
-      cpuIdleW: getCpu('epyc-9654').idleW, sockets: 2,
+      cpuIdleW: getCpu('epyc-9654').idleW,
+      sockets: 2,
       boardW: getBoard('server').watts,
-      coolingW: getCooling('server-2u').watts,
       drivesW: 4 * getDrive('nvme').idleW,
     });
-    // 2x EPYC 9654 in a 2U chassis: well past 300 W before the GPU starts.
-    expect(dual).toBeGreaterThan(300);
-  });
-
-  it('counts rack cooling as a first-class term', () => {
-    const air = hostBaseOverheadW({ ...desktop, coolingW: getCooling('desktop-air').watts });
-    const rack = hostBaseOverheadW({ ...desktop, coolingW: getCooling('server-1u').watts });
-    // 1U fans alone add more than an entire desktop's base draw.
-    expect(rack - air).toBeGreaterThan(80);
+    expect(dual).toBeGreaterThan(250);
   });
 
   it('never divides by a zero socket count', () => {
     expect(hostBaseOverheadW({ ...desktop, sockets: 0 })).toBe(hostBaseOverheadW(desktop));
+  });
+});
+
+describe('cooling scales with the heat removed', () => {
+  const u1 = getCooling('server-1u');
+  const u2 = getCooling('server-2u');
+  const u4 = getCooling('server-4u');
+  const air = getCooling('desktop-air');
+
+  it('costs more in 1U than 4U for the same heat', () => {
+    // Chassis height caps fan diameter and power goes as RPM^3, so a small
+    // fan pays cubically to move the same air.
+    const heat = 2000;
+    expect(coolingPowerW(u1, heat)).toBeGreaterThan(coolingPowerW(u2, heat));
+    expect(coolingPowerW(u2, heat)).toBeGreaterThan(coolingPowerW(u4, heat));
+    expect(coolingPowerW(u1, heat) / coolingPowerW(u4, heat)).toBeCloseTo(3.33, 1);
+  });
+
+  it('grows with the load rather than sitting at a constant', () => {
+    // The whole point: eight H100s need more cooling than an empty chassis.
+    const empty = coolingPowerW(u4, 300);
+    const loaded = coolingPowerW(u4, 6000);
+    expect(loaded).toBeGreaterThan(empty * 5);
+  });
+
+  it('gives an 8x H100 chassis a realistic fan budget', () => {
+    // 8 GPUs decoding at roughly 40% of a 700 W rating, plus ~400 W of host.
+    const heat = 8 * 280 + 400;
+    expect(coolingPowerW(u4, heat)).toBeGreaterThan(60);
+    expect(coolingPowerW(u4, heat)).toBeLessThan(150);
+  });
+
+  it('never drops below the idle floor — fans do not stop', () => {
+    expect(coolingPowerW(u1, 0)).toBe(u1.idleFloorW);
+    expect(coolingPowerW(air, 0)).toBe(air.idleFloorW);
+  });
+
+  it('charges nothing for a passive chassis', () => {
+    expect(coolingPowerW(getCooling('passive'), 5000)).toBe(0);
+  });
+
+  it('treats a negative load as zero', () => {
+    expect(coolingPowerW(u2, -100)).toBe(u2.idleFloorW);
   });
 });
 
@@ -239,6 +273,7 @@ describe('end to end with a host specification', () => {
   const host = (over: Partial<RamSpec> = {}, baseW = 55): HostSpec => ({
     ram: ram(over),
     baseOverheadW: baseW,
+    cooling: getCooling('desktop-air'),
   });
 
   function input(over: Partial<CalcInput> = {}): CalcInput {
@@ -258,12 +293,33 @@ describe('end to end with a host specification', () => {
     };
   }
 
-  it('reports the host draw split into base, idle RAM and active RAM', () => {
+  it('reports the host draw split into base, RAM and cooling', () => {
     const r = runCalculation(input());
     expect(r.energy.host.baseW).toBe(55);
     expect(r.energy.host.ramIdleW).toBeCloseTo(2 * ddr5.idleWattsPerModule, 5);
     expect(r.energy.host.ramActiveW).toBe(0); // nothing offloaded
-    expect(r.energy.host.totalW).toBeCloseTo(55 + r.energy.host.ramIdleW, 5);
+    expect(r.energy.host.coolingW).toBeGreaterThan(0);
+    expect(r.energy.host.totalW).toBeCloseTo(
+      55 + r.energy.host.ramIdleW + r.energy.host.coolingW,
+      5,
+    );
+  });
+
+  it('includes the GPU in the heat the fans have to remove', () => {
+    const r = runCalculation(input());
+    expect(r.energy.host.heatLoadW).toBeGreaterThan(r.energy.decodePowerW);
+    expect(r.energy.host.heatLoadW).toBeCloseTo(
+      r.energy.decodePowerW + r.energy.host.baseW + r.energy.host.ramIdleW,
+      5,
+    );
+  });
+
+  it('spends more on cooling for more GPUs', () => {
+    const one = runCalculation(input());
+    const eight = runCalculation(
+      input({ hardware: { gpu: rtx4090, numGpus: 8, parallelism: 'tp' } }),
+    );
+    expect(eight.energy.host.coolingW).toBeGreaterThan(one.energy.host.coolingW * 4);
   });
 
   it('makes an over-populated server cost more per token on a small model', () => {

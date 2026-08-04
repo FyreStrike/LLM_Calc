@@ -288,7 +288,66 @@ E_{\text{Steckdose}} = \frac{(P_{\text{GPU}} + P_{\text{Host}})}{\eta_{\text{PSU
 | $P_{\text{Host}}$ | 80 W Desktop | — |
 | PUE | 1,0 Heim-PC / 1,54 RZ-Mittel / 1,09 Hyperscaler | Uptime Institute 2025, Google 2025 |
 
-### 4.3 Strompreise und CO₂
+### 4.3 Host-System
+
+Implementierung: `src/core/host.ts`, Daten in `src/data/cpu.ts` und `src/data/ram.ts`.
+
+Die Nicht-GPU-Leistung zerfällt in drei Terme mit unterschiedlichem Verhalten:
+
+$$P_{\text{Host}} = \underbrace{P_{\text{CPU}} \cdot n_{\text{Sockel}} + P_{\text{Board}} + P_{\text{LW}}}_{\text{lastunabhängig}}
++ \underbrace{n_{\text{Module}} \cdot (P_{\text{idle}} + \Delta P \cdot d_{\text{RAM}})}_{\text{RAM}}
++ \underbrace{P_{\text{Kühl}}(Q)}_{\text{lastabhängig}}$$
+
+**Speicher.** Die Leerlaufleistung skaliert mit den **verbauten Modulen**, nicht
+mit dem Bedarf des Modells — ein 512-GB-Server zahlt rund 30 W permanent, auch
+für ein 8B-Modell. Der Aktivanteil $\Delta P$ greift nur über den Duty-Cycle
+$d_{\text{RAM}}$, also den Zeitanteil, in dem Gewichte aus dem Host-RAM
+gestreamt werden.
+
+**Kühlung.** Die Lüfterleistung ist ein Anteil der abzuführenden Wärme, nicht
+eine Konstante pro Gehäuse:
+
+$$P_{\text{Kühl}} = \max\left(P_{\text{Floor}},\; Q \cdot f_{\text{Gehäuse}}\right),
+\qquad Q = P_{\text{GPU,decode}} + P_{\text{Host,statisch}} + P_{\text{RAM}}$$
+
+Die Bauhöhe deckelt den Lüfterdurchmesser (1U: 40 mm, 2U: 60 mm, 4U: 80–120 mm).
+Für geometrisch ähnliche Lüfter gilt Volumenstrom $\propto n \cdot d^3$ und
+Leistung $\propto n^3 \cdot d^5$ — ein kleiner Lüfter muss also erheblich
+schneller drehen und zahlt kubisch dafür. Hinzu kommt der höhere Staudruck im
+engen 1U-Luftweg. Belegt: ein 40-mm-Serverlüfter mit 27 CFM zieht 12 W, ein
+120-mm-Lüfter liefert mehr Luft für 1–3 W
+([SANYO DENKI](https://coolingfans.blog/guide-to-selecting-fans-for-1u-2u-3u-server-racks/),
+[ServeTheHome](https://www.servethehome.com/testing-conventional-wisdom-1u-v-2u-power-consumption/)).
+
+| Gehäuse | $f$ | $P_{\text{Floor}}$ |
+| --- | --- | --- |
+| Desktop, Luftkühlung | 2 % | 4 W |
+| Server 4U / Tower | 3 % | 20 W |
+| Server 2U | 6 % | 30 W |
+| Server 1U | 10 % | 40 W |
+
+Wirkung, gemessen an Llama-3.3-70B FP8, Batch 32, 2× Xeon Platinum, 512 GB:
+
+| Konfiguration | Abwärme | Lüfter |
+| --- | --- | --- |
+| 1× H100, 4U | 506 W | 20 W (Floor) |
+| 8× H100, 4U | 2006 W | 60 W |
+| 8× H100, 2U | 2006 W | 120 W |
+| 8× H100, 1U | 2006 W | 201 W |
+
+Als Wärmelast dient bewusst die **Decode-Leistung**, nicht die TDP: Lüfter
+folgen dem eingeschwungenen Zustand, und im speicherbandbreitenlimitierten
+Decode liegt eine GPU deutlich unter ihrer Nennleistung. Die Lüfterleistung
+selbst geht nicht in $Q$ ein — sie wird ausgeblasen statt die Ansaugluft zu
+erwärmen; die Rückkopplung ist zweiter Ordnung.
+
+> **Einschränkung.** Die CPU-Leerlaufwerte sind Schätzungen bei 15–30 % der TDP
+> (server-seitig höher wegen des IO-Dies); Hersteller veröffentlichen sie nicht.
+> Sie reproduzieren die berichteten ~100 W Systemleerlauf einzelner
+> EPYC-Plattformen. Die Gehäusefaktoren $f$ sind ebenfalls kalibrierte
+> Schätzwerte, keine Messreihe.
+
+### 4.4 Strompreise und CO₂
 
 Eurostat, 2. Halbjahr 2025, EUR/kWh inklusive aller Steuern und Abgaben:
 
@@ -302,7 +361,7 @@ USA (EIA 2026 YTD): Haushalt 0,183 USD/kWh, Gewerbe 0,135, Industrie 0,085.
 CO₂-Intensitäten sind Jahresmittel des Netzes und schwanken stark nach Stunde und
 Jahreszeit — sie sind als Größenordnung zu lesen, nicht als Messwert.
 
-### 4.4 API-Vergleich
+### 4.5 API-Vergleich
 
 $$c_{\text{API}} = r \cdot c_{\text{in}} + (1 - r) \cdot c_{\text{out}}$$
 
@@ -393,7 +452,7 @@ stillschweigend als dense.
 npm run test
 ```
 
-128 Tests in `src/core/__tests__/` prüfen jede Formel gegen von Hand berechnete
+197 Tests in `src/core/__tests__/` prüfen jede Formel gegen von Hand berechnete
 Referenzwerte. Die inhaltlich wichtigsten:
 
 * Llama-3.1-8B Q4_K_M ⇒ 4,58 GB Gewichte (deckungsgleich mit llama.cpp)

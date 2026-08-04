@@ -167,7 +167,7 @@ export function HostPanel() {
             <Select value={state.coolingId} onChange={(v) => state.set('coolingId', v)}>
               {COOLING.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {t(c.labelKey)} — {c.watts} W
+                  {t(c.labelKey)} — {num(c.heatFractionOfLoad * 100, language, 1)} %
                 </option>
               ))}
             </Select>
@@ -212,7 +212,7 @@ export function HostPanel() {
           )}
           {row(t('host.ramIdlePower'), `${num(idlePower.idleW, language, 1)} W`)}
           {row(t('host.ramFullPower'), `${num(fullPower.totalW, language, 1)} W`)}
-          {row(t('host.cooling'), `${num(parts.coolingW, language, 0)} W`)}
+          {row(t('host.drives'), `${num(parts.drivesW, language, 0)} W`)}
           {row(t('host.board'), `${num(parts.boardW, language, 0)} W`)}
         </dl>
 

@@ -282,7 +282,6 @@ export function hostComponents(state: AppState): HostComponents {
     cpuIdleW: getCpu(state.cpuId).idleW,
     sockets: state.cpuSockets,
     boardW: getBoard(state.boardId).watts,
-    coolingW: getCooling(state.coolingId).watts,
     drivesW: getDrive(state.driveId).idleW * state.driveCount,
   };
 }
@@ -299,6 +298,7 @@ export function hostSpec(state: AppState): HostSpec {
     },
     // Derived from the itemised components unless explicitly overridden.
     baseOverheadW: state.hostBaseOverheadOverrideW ?? hostBaseOverheadW(components),
+    cooling: getCooling(state.coolingId),
     components,
   };
 }

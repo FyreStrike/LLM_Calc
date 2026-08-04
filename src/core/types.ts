@@ -220,7 +220,17 @@ export interface CpuSpec {
 export interface CoolingSpec {
   id: string;
   labelKey: string;
-  watts: number;
+  /**
+   * Fan power as a fraction of the heat being removed.
+   *
+   * Chassis height caps fan diameter, and fan power scales with the cube of
+   * RPM, so a 1U moving the same heat as a 4U spends several times as much
+   * doing it. This is the term that makes eight H100s cost more to cool than
+   * one — the same chassis, far more heat.
+   */
+  heatFractionOfLoad: number;
+  /** Fans never stop entirely; this is the floor at negligible load. */
+  idleFloorW: number;
 }
 
 export interface DriveSpec {
@@ -240,17 +250,19 @@ export interface HostComponents {
   cpuIdleW: number;
   sockets: number;
   boardW: number;
-  coolingW: number;
   drivesW: number;
 }
 
 export interface HostSpec {
   ram: RamSpec;
   /**
-   * Everything else in the host: CPU at idle, board and VRM losses, drives,
-   * fans. RAM is excluded because it is costed separately.
+   * Load-independent host draw: CPU at idle, board and VRM losses, drives.
+   * Excludes RAM and cooling, both of which depend on what the machine is
+   * actually doing and are computed separately.
    */
   baseOverheadW: number;
+  /** Cooling scales with the heat removed, so it needs the GPU's draw. */
+  cooling?: CoolingSpec;
   /** Itemisation behind `baseOverheadW`, for display. */
   components?: HostComponents;
 }
@@ -417,12 +429,16 @@ export interface EnergyResult {
    * is visible rather than buried in a single overhead figure.
    */
   host: {
-    /** CPU, board, drives, fans. */
+    /** CPU, board, drives. Load-independent. */
     baseW: number;
     /** Paid for every installed module whether or not it is used. */
     ramIdleW: number;
     /** Extra draw while weights stream from host memory. */
     ramActiveW: number;
+    /** Fans, scaled to the heat actually being removed. */
+    coolingW: number;
+    /** Total heat the chassis has to dissipate, GPU included. */
+    heatLoadW: number;
     totalW: number;
   };
 }

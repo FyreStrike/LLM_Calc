@@ -53,23 +53,34 @@ export function getCpu(id: string): CpuSpec {
 }
 
 /**
- * Cooling and chassis airflow.
+ * Cooling and chassis airflow, as a fraction of the heat being removed.
  *
- * This is the term most often forgotten and the reason a server idles far
- * above a desktop. Rack chassis use small, high-static-pressure fans that are
- * inefficient by design: a 1U with six 40 mm fans can pull more power than an
- * entire desktop's cooling even at moderate RPM. Figures are for steady-state
- * operation under load, not fan-failure ramp-up.
+ * Two things drive these numbers:
+ *
+ * 1. **Chassis height caps fan diameter.** 1U (44.45 mm) admits only 40 mm
+ *    fans, 2U 60 mm, 4U 80-120 mm. For geometrically similar fans, airflow
+ *    goes as `RPM x d^3` while power goes as `RPM^3 x d^5`, so a small fan
+ *    must spin far faster for the same airflow and pays cubically for it. A
+ *    40 mm server fan delivering 27 CFM draws 12 W; a 120 mm fan moves more
+ *    air for 1-3 W.
+ * 2. **Restriction.** A 1U air path is narrow and packed, so the fans work
+ *    against high back-pressure — an inefficient operating point.
+ *
+ * Scaling with load rather than fixing a constant matters: eight H100s in a
+ * 4U dissipate roughly ten times an empty chassis, and the fans follow.
+ *
+ * Sources: https://coolingfans.blog/guide-to-selecting-fans-for-1u-2u-3u-server-racks/
+ * https://www.servethehome.com/testing-conventional-wisdom-1u-v-2u-power-consumption/
  */
 export const COOLING: CoolingSpec[] = [
-  { id: 'passive', labelKey: 'cooling.passive', watts: 1 },
-  { id: 'laptop', labelKey: 'cooling.laptop', watts: 3 },
-  { id: 'desktop-air', labelKey: 'cooling.desktopAir', watts: 8 },
-  { id: 'desktop-highflow', labelKey: 'cooling.desktopHighflow', watts: 18 },
-  { id: 'aio', labelKey: 'cooling.aio', watts: 15 },
-  { id: 'server-4u', labelKey: 'cooling.server4u', watts: 35 },
-  { id: 'server-2u', labelKey: 'cooling.server2u', watts: 65 },
-  { id: 'server-1u', labelKey: 'cooling.server1u', watts: 95 },
+  { id: 'passive', labelKey: 'cooling.passive', heatFractionOfLoad: 0, idleFloorW: 0 },
+  { id: 'laptop', labelKey: 'cooling.laptop', heatFractionOfLoad: 0.04, idleFloorW: 1 },
+  { id: 'desktop-air', labelKey: 'cooling.desktopAir', heatFractionOfLoad: 0.02, idleFloorW: 4 },
+  { id: 'desktop-highflow', labelKey: 'cooling.desktopHighflow', heatFractionOfLoad: 0.03, idleFloorW: 8 },
+  { id: 'aio', labelKey: 'cooling.aio', heatFractionOfLoad: 0.025, idleFloorW: 8 },
+  { id: 'server-4u', labelKey: 'cooling.server4u', heatFractionOfLoad: 0.03, idleFloorW: 20 },
+  { id: 'server-2u', labelKey: 'cooling.server2u', heatFractionOfLoad: 0.06, idleFloorW: 30 },
+  { id: 'server-1u', labelKey: 'cooling.server1u', heatFractionOfLoad: 0.1, idleFloorW: 40 },
 ];
 
 export function getCooling(id: string): CoolingSpec {
