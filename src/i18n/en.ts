@@ -228,6 +228,9 @@ export const en = {
     compute: 'Compute (ε_flop·W)',
     memory: 'Data movement (ε_mop·Q)',
     static: 'Static (π₀·T)',
+    ofTdp: 'of TDP',
+    belowTdpNote:
+      'Well under the {{tdp}} W TDP ({{percent}} %), because decode is memory-bandwidth-bound: arithmetic intensity {{intensity}} against a ridge point of {{ridge}} FLOP/byte. The compute units sit largely idle — TDP is a thermal ceiling for sustained tensor-core load, not a draw figure for generating tokens.',
     powerDraw: 'Power draw',
     joulesPerToken: 'Energy per token',
     wallPower: 'Wall-plug power',
@@ -263,6 +266,8 @@ export const en = {
   results: {
     fits: 'Fits',
     doesNotFit: 'Does not fit',
+    hypothetical:
+      'Note: the speed, power and cost below are arithmetic only — they describe a machine with enough memory, not the one selected. These figures mean something only once the configuration fits.',
     vramUsage: 'VRAM usage',
     of: 'of',
     memoryBreakdown: 'Memory breakdown',

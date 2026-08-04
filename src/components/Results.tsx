@@ -85,9 +85,25 @@ function Verdict({ result }: { result: CalcResult }) {
         </span>
       </div>
 
+      {/* Speed, power and cost below are derived from a machine that cannot
+          hold this configuration. Presenting them with the same confidence as
+          valid results is how a 985 W figure for an impossible rig ends up
+          looking authoritative. */}
+      {!fits && (
+        <div className="border-t border-[var(--border)] bg-[var(--bad-soft)] px-5 py-2.5">
+          <p className="text-[12px] leading-relaxed font-medium text-[var(--bad)]">
+            {t('results.hypothetical')}
+          </p>
+        </div>
+      )}
+
       <Divider />
 
-      <div className="grid gap-px bg-[var(--border)] sm:grid-cols-3">
+      <div
+        className={`grid gap-px bg-[var(--border)] sm:grid-cols-3 ${
+          fits ? '' : 'opacity-60'
+        }`}
+      >
         {/* memory */}
         <div className="bg-[var(--surface)] px-5 py-4">
           <Stat
@@ -366,6 +382,10 @@ function EnergyCard({ result }: { result: CalcResult }) {
   const t = useT();
   const language = useLanguage((s) => s.language);
   const { energy } = result;
+  const state = useStore();
+  const gpu = getGpu(state.gpuId) ?? GPUS[0];
+  const totalTdpW = gpu.tdpW * state.numGpus;
+  const decodePctTdp = totalTdpW > 0 ? (energy.decodePowerW / totalTdpW) * 100 : 0;
   const ramDutyPct = result.performance.ramDutyCycle * 100;
   const d = energy.decomposition;
   const totalJ = d ? d.computeJoules + d.memoryJoules + d.staticJoules : 0;
@@ -385,11 +405,13 @@ function EnergyCard({ result }: { result: CalcResult }) {
           label={`GPU · ${t('results.decode')}`}
           value={num(energy.decodePowerW, language, 0)}
           unit="W"
+          sub={`${num(decodePctTdp, language, 0)} % ${t('energy.ofTdp')}`}
         />
         <Stat
           label={`GPU · ${t('results.prefill')}`}
           value={num(energy.prefillPowerW, language, 0)}
           unit="W"
+          sub={`${num((energy.prefillPowerW / totalTdpW) * 100, language, 0)} % ${t('energy.ofTdp')}`}
         />
         <Stat
           label={t('energy.wallPower')}
@@ -397,6 +419,20 @@ function EnergyCard({ result }: { result: CalcResult }) {
           unit="W"
         />
       </div>
+
+      {/* Answers the obvious objection — four 360 W cards ought to draw
+          1440 W. TDP is a thermal ceiling for sustained tensor-core load;
+          memory-bound decode leaves those units idle. */}
+      {result.performance.decodeBound === 'memory' && (
+        <p className="mt-3 text-[11px] leading-relaxed text-[var(--text-3)]">
+          {t('energy.belowTdpNote', {
+            tdp: num(totalTdpW, language, 0),
+            percent: num(decodePctTdp, language, 0),
+            intensity: num(result.performance.decodeIntensity, language, 1),
+            ridge: num(result.performance.ridgePoint, language, 0),
+          })}
+        </p>
+      )}
 
       {/* Host draw broken out, so the standing cost of installed memory is
           visible rather than folded into one overhead number. */}

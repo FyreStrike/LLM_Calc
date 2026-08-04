@@ -230,6 +230,9 @@ export const de: Translations = {
     compute: 'Rechnen (ε_flop·W)',
     memory: 'Datentransfer (ε_mop·Q)',
     static: 'Statisch (π₀·T)',
+    ofTdp: 'der TDP',
+    belowTdpNote:
+      'Deutlich unter der TDP von {{tdp}} W ({{percent}} %), weil Decode speicherbandbreitenlimitiert ist: arithmetische Intensität {{intensity}} gegenüber einem Ridge Point von {{ridge}} FLOP/Byte. Die Rechenwerke liegen dabei weitgehend brach — TDP ist eine thermische Obergrenze für dauerhafte Tensor-Core-Last, kein Verbrauchswert beim Token-Generieren.',
     powerDraw: 'Leistungsaufnahme',
     joulesPerToken: 'Energie pro Token',
     wallPower: 'Leistung an der Steckdose',
@@ -265,6 +268,8 @@ export const de: Translations = {
   results: {
     fits: 'Passt',
     doesNotFit: 'Passt nicht',
+    hypothetical:
+      'Achtung: Geschwindigkeit, Leistungsaufnahme und Kosten unten sind rein rechnerisch — sie gelten für eine Maschine mit genug Speicher, nicht für die gewählte. Erst wenn die Konfiguration passt, sind diese Werte belastbar.',
     vramUsage: 'VRAM-Auslastung',
     of: 'von',
     memoryBreakdown: 'Speicheraufteilung',
