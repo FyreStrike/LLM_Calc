@@ -1,5 +1,5 @@
 import { GB } from './memory';
-import type { RamSpec, RamTypeSpec } from './types';
+import type { HostComponents, RamSpec, RamTypeSpec } from './types';
 
 /**
  * Host system model: memory bandwidth, capacity and power.
@@ -15,6 +15,20 @@ import type { RamSpec, RamTypeSpec } from './types';
  *    clock even while running an 8B model. That cost lands in every token,
  *    and it is invisible if RAM is folded into a single host-overhead number.
  */
+
+/**
+ * Non-RAM host draw, summed from its parts.
+ *
+ * CPU idle multiplies by socket count — the single biggest reason a
+ * dual-socket server cannot share a desktop's overhead figure — and chassis
+ * cooling is counted explicitly, because rack fans are a large standing load
+ * that has nothing to do with the model being served.
+ */
+export function hostBaseOverheadW(c: HostComponents): number {
+  return (
+    c.cpuIdleW * Math.max(1, c.sockets) + c.boardW + c.coolingW + c.drivesW
+  );
+}
 
 /** Peak theoretical bandwidth of the memory subsystem, in bytes per second. */
 export function ramBandwidthBytesPerSec(ram: RamSpec): number {

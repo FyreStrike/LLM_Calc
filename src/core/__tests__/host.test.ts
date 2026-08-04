@@ -1,15 +1,22 @@
 import { describe, expect, it } from 'vitest';
+import { getBoard, getCooling, getCpu, getDrive } from '../../data/cpu';
 import { getRamType, HOST_RAM_USABLE_FRACTION } from '../../data/ram';
 import {
   activeWattsPerModule,
   hostAvailableBytes,
+  hostBaseOverheadW,
   ramBandwidthGBs,
   ramPower,
 } from '../host';
 import { runCalculation } from '../index';
 import { planOffload } from '../performance';
 import { getKvQuant, getQuant } from '../quant';
-import { GB } from '../memory';
+import {
+  computeMemory,
+  GB,
+  runtimeContextBytes,
+  runtimeContextLabelKey,
+} from '../memory';
 import type { CalcInput, GpuSpec, HostSpec, RamSpec, Workload } from '../types';
 import { llama8b, qwen235b } from './memory.test';
 
@@ -104,6 +111,82 @@ describe('memory power', () => {
     // A very low clock would otherwise scale the reference figure under idle.
     const slow = activeWattsPerModule(ram({ speedMTps: 100 }), ddr5);
     expect(slow).toBeGreaterThanOrEqual(ddr5.idleWattsPerModule);
+  });
+});
+
+describe('host component build-up', () => {
+  const desktop = {
+    cpuIdleW: 15, sockets: 1, boardW: 20, coolingW: 8, drivesW: 2,
+  };
+
+  it('sums the components', () => {
+    expect(hostBaseOverheadW(desktop)).toBe(45);
+  });
+
+  it('multiplies CPU idle by socket count', () => {
+    // The reason a flat 55 W cannot describe a dual-socket machine.
+    const dualXeon = { cpuIdleW: 85, sockets: 2, boardW: 55, coolingW: 65, drivesW: 8 };
+    expect(hostBaseOverheadW(dualXeon)).toBe(85 * 2 + 55 + 65 + 8);
+    expect(hostBaseOverheadW(dualXeon)).toBeGreaterThan(hostBaseOverheadW(desktop) * 6);
+  });
+
+  it('puts a dual-socket server far above any desktop figure', () => {
+    const dual = hostBaseOverheadW({
+      cpuIdleW: getCpu('epyc-9654').idleW, sockets: 2,
+      boardW: getBoard('server').watts,
+      coolingW: getCooling('server-2u').watts,
+      drivesW: 4 * getDrive('nvme').idleW,
+    });
+    // 2x EPYC 9654 in a 2U chassis: well past 300 W before the GPU starts.
+    expect(dual).toBeGreaterThan(300);
+  });
+
+  it('counts rack cooling as a first-class term', () => {
+    const air = hostBaseOverheadW({ ...desktop, coolingW: getCooling('desktop-air').watts });
+    const rack = hostBaseOverheadW({ ...desktop, coolingW: getCooling('server-1u').watts });
+    // 1U fans alone add more than an entire desktop's base draw.
+    expect(rack - air).toBeGreaterThan(80);
+  });
+
+  it('never divides by a zero socket count', () => {
+    expect(hostBaseOverheadW({ ...desktop, sockets: 0 })).toBe(hostBaseOverheadW(desktop));
+  });
+});
+
+describe('accelerator runtime context', () => {
+  it('is not called a CUDA context outside NVIDIA', () => {
+    expect(runtimeContextLabelKey('nvidia')).toBe('results.cudaContext');
+    expect(runtimeContextLabelKey('amd')).toBe('results.rocmContext');
+    expect(runtimeContextLabelKey('intel')).toBe('results.levelZeroContext');
+    expect(runtimeContextLabelKey('apple')).toBe('results.metalContext');
+  });
+
+  it('costs far less on Apple, where memory is unified', () => {
+    expect(runtimeContextBytes('apple', 1)).toBeLessThan(runtimeContextBytes('nvidia', 1) / 3);
+  });
+
+  it('scales with device count', () => {
+    expect(runtimeContextBytes('nvidia', 8)).toBe(runtimeContextBytes('nvidia', 1) * 8);
+  });
+
+  it('changes the memory breakdown when the vendor changes', () => {
+    const amdGpu: GpuSpec = {
+      id: 'mi300x', name: 'MI300X', vendor: 'amd', vramGb: 192,
+      bandwidthGBs: 5325, fp16TFlops: 1307, tdpW: 750, idleW: 90,
+    };
+    const nv = computeMemory(llama8b, getQuant('fp16'), getKvQuant('fp16'), {
+      contextLength: 4096, promptTokens: 1024, outputTokens: 256, batchSize: 1,
+      runtime: 'vllm', prefillChunkTokens: 2048, allowOffload: false,
+      hostRamBandwidthGBs: 90, mbu: 0.7, mfu: 0.4,
+    }, 1, 'nvidia');
+    const apple = computeMemory(llama8b, getQuant('fp16'), getKvQuant('fp16'), {
+      contextLength: 4096, promptTokens: 1024, outputTokens: 256, batchSize: 1,
+      runtime: 'vllm', prefillChunkTokens: 2048, allowOffload: false,
+      hostRamBandwidthGBs: 90, mbu: 0.7, mfu: 0.4,
+    }, 1, 'apple');
+
+    expect(apple.cudaContextBytes).toBeLessThan(nv.cudaContextBytes);
+    expect(amdGpu.vendor).toBe('amd'); // fixture sanity
   });
 });
 

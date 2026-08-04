@@ -112,6 +112,23 @@ export const en = {
     desktop: 'Desktop',
     workstation: 'Workstation',
     server: 'Server (dual socket)',
+    cpu: 'CPU',
+    sockets: 'Sockets',
+    segment: {
+      mobile: 'Mobile / SoC',
+      desktop: 'Desktop',
+      workstation: 'Workstation',
+      server: 'Server',
+    },
+    cooling: 'Cooling / chassis',
+    coolingHelp: 'Rack fans are the main reason a server idles far above a desktop.',
+    board: 'Mainboard',
+    drives: 'Drives',
+    driveCount: 'Count',
+    overrideBase: 'Override rest of system',
+    overrideBaseHelp: 'Replaces the sum of CPU, board, cooling and drives with a measured figure.',
+    serverIdleNote:
+      'This system draws about {{watts}} W before the GPU computes anything — multi-socket CPUs and rack cooling dominate the standing load.',
     ramType: 'Memory type',
     ramSpeed: 'Speed',
     channels: 'Channels',
@@ -125,6 +142,30 @@ export const en = {
     baseOverheadHelp: 'CPU at idle, board and VRM, drives, fans — excluding RAM, which is costed separately.',
     idleDominatesNote:
       '{{modules}} modules draw {{watts}} W continuously, regardless of how much memory the model actually needs. That standing load is in every single token.',
+  },
+
+  cooling: {
+    passive: 'Passive / fanless',
+    laptop: 'Laptop fan',
+    desktopAir: 'Desktop air cooling',
+    desktopHighflow: 'Desktop, many fans',
+    aio: 'AIO liquid cooling',
+    server4u: 'Server 4U / tower',
+    server2u: 'Server 2U',
+    server1u: 'Server 1U',
+  },
+
+  board: {
+    laptop: 'Laptop board',
+    desktop: 'Desktop board',
+    workstation: 'Workstation board',
+    server: 'Server board (BMC)',
+  },
+
+  drive: {
+    nvme: 'NVMe SSD',
+    sataSsd: 'SATA SSD',
+    hdd: 'Hard drive',
   },
 
   quant: {
@@ -176,6 +217,8 @@ export const en = {
     idle: 'π₀ (idle power)',
     psu: 'PSU efficiency',
     pue: 'PUE',
+    pueHelp: 'Pick a preset or type your own value on the right.',
+    pueCustom: 'Custom value',
     hostOverhead: 'Host overhead',
     calibrate: 'Reset coefficients to hardware defaults',
     decomposition: 'Energy decomposition',
@@ -218,6 +261,9 @@ export const en = {
     kvCache: 'KV cache',
     activations: 'Activations',
     cudaContext: 'CUDA context',
+    rocmContext: 'ROCm / HIP context',
+    levelZeroContext: 'Level Zero context',
+    metalContext: 'Metal context',
     framework: 'Framework overhead',
     performance: 'Performance',
     generationSpeed: 'Generation speed',

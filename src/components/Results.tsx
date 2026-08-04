@@ -1,19 +1,26 @@
-import { GB } from '../core/memory';
-import type { CalcResult, ModelSpec, Warning } from '../core/types';
+import { GB, runtimeContextLabelKey } from '../core/memory';
+import type { CalcResult, ModelSpec, Vendor, Warning } from '../core/types';
 import { getGpu, GPUS } from '../data/gpus';
 import { useLanguage, useT } from '../i18n';
 import { selectedModel, useStore } from '../state/store';
 import { bytes, duration, money, num, tokens } from '../ui/format';
 import { Badge, Card, Divider, Note, Stat, Swatch } from '../ui/primitives';
 
-// Fixed categorical order — never cycled, never reassigned by rank.
-const MEMORY_SERIES = [
-  { key: 'weightsBytes', color: 'var(--series-1)', label: 'results.weights' },
-  { key: 'kvCacheBytes', color: 'var(--series-2)', label: 'results.kvCache' },
-  { key: 'activationsBytes', color: 'var(--series-3)', label: 'results.activations' },
-  { key: 'cudaContextBytes', color: 'var(--series-4)', label: 'results.cudaContext' },
-  { key: 'frameworkOverheadBytes', color: 'var(--series-5)', label: 'results.framework' },
-] as const;
+/**
+ * Fixed categorical order — never cycled, never reassigned by rank.
+ *
+ * The runtime-context label depends on the vendor: it is a CUDA context only
+ * on NVIDIA, a HIP context on AMD, Level Zero on Intel and Metal on Apple.
+ */
+function memorySeries(vendor: Vendor) {
+  return [
+    { key: 'weightsBytes', color: 'var(--series-1)', label: 'results.weights' },
+    { key: 'kvCacheBytes', color: 'var(--series-2)', label: 'results.kvCache' },
+    { key: 'activationsBytes', color: 'var(--series-3)', label: 'results.activations' },
+    { key: 'cudaContextBytes', color: 'var(--series-4)', label: runtimeContextLabelKey(vendor) },
+    { key: 'frameworkOverheadBytes', color: 'var(--series-5)', label: 'results.framework' },
+  ] as const;
+}
 
 export function Results({ result }: { result: CalcResult }) {
   const advanced = useStore((s) => s.advanced);
@@ -160,8 +167,11 @@ function Verdict({ result }: { result: CalcResult }) {
 function MemoryCard({ result }: { result: CalcResult }) {
   const t = useT();
   const language = useLanguage((s) => s.language);
+  const gpuId = useStore((s) => s.gpuId);
   const { memory, usableVramBytes } = result;
 
+  const vendor = (getGpu(gpuId) ?? GPUS[0]).vendor;
+  const MEMORY_SERIES = memorySeries(vendor);
   const scale = Math.max(memory.totalBytes, usableVramBytes);
   const freeBytes = Math.max(0, usableVramBytes - memory.totalBytes);
 

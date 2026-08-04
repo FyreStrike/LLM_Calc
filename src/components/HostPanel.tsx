@@ -1,17 +1,20 @@
-import { ramBandwidthGBs, ramPower } from '../core/host';
+import { hostBaseOverheadW, ramBandwidthGBs, ramPower } from '../core/host';
+import { BOARDS, COOLING, CPUS, DRIVES, getCpu } from '../data/cpu';
 import { CHANNEL_OPTIONS, getRamType, HOST_PRESETS, RAM_TYPES } from '../data/ram';
 import { useLanguage, useT } from '../i18n';
-import { hostSpec, useStore } from '../state/store';
+import { hostComponents, hostSpec, useStore } from '../state/store';
 import { num } from '../ui/format';
-import { Card, Field, NumberInput, Note, Select } from '../ui/primitives';
+import { Button, Card, Field, NumberInput, Note, Select } from '../ui/primitives';
+
+const CPU_SEGMENTS = ['mobile', 'desktop', 'workstation', 'server'] as const;
 
 /**
- * Host system: memory specification and non-GPU draw.
+ * Host system: CPU, memory, board, cooling and drives.
  *
- * The RAM fields replace a bandwidth slider nobody could estimate. They also
- * make two effects visible that a single "host overhead" number hides — that
- * offloading is bounded by installed capacity, and that idle memory draw is
- * paid for every module whether the model needs it or not.
+ * Every field here exists because a single overhead number cannot span a
+ * laptop and a dual-socket 1U server. Two Xeon sockets idle above 170 W before
+ * anything else is counted, and rack cooling adds nearly as much again — none
+ * of which a flat figure can express.
  */
 export function HostPanel() {
   const t = useT();
@@ -19,23 +22,39 @@ export function HostPanel() {
   const state = useStore();
 
   const host = hostSpec(state);
+  const parts = hostComponents(state);
   const ramType = getRamType(state.ramTypeId);
   const bandwidth = ramBandwidthGBs(host.ram);
   const idlePower = ramPower(host.ram, ramType, 0);
   const fullPower = ramPower(host.ram, ramType, 1);
+  const computed = hostBaseOverheadW(parts);
+  const overridden = state.hostBaseOverheadOverrideW !== null;
 
   function applyPreset(id: string) {
     const preset = HOST_PRESETS.find((p) => p.id === id);
     if (!preset) return;
+    const byPreset: Record<string, Partial<typeof state>> = {
+      laptop: { cpuId: 'mobile-u', cpuSockets: 1, boardId: 'laptop', coolingId: 'laptop', driveCount: 1, ramChannels: 2 },
+      desktop: { cpuId: 'ryzen7-9700x', cpuSockets: 1, boardId: 'desktop', coolingId: 'desktop-air', driveCount: 1, ramChannels: 2 },
+      workstation: { cpuId: 'threadripper-7960x', cpuSockets: 1, boardId: 'workstation', coolingId: 'desktop-highflow', driveCount: 2, ramChannels: 4 },
+      server: { cpuId: 'epyc-9354', cpuSockets: 2, boardId: 'server', coolingId: 'server-2u', driveCount: 4, ramChannels: 8 },
+    };
     state.patch({
       hostPresetId: id,
-      hostBaseOverheadW: preset.baseOverheadW,
       ramModules: preset.ramModules,
       ramCapacityGb: preset.ramCapacityGb,
-      // Servers run many channels; desktops two.
-      ramChannels: id === 'server' ? 8 : id === 'workstation' ? 4 : 2,
+      // A preset means wanting the preset — drop any manual override.
+      hostBaseOverheadOverrideW: null,
+      ...byPreset[id],
     });
   }
+
+  const row = (label: string, value: string) => (
+    <div className="flex justify-between gap-2">
+      <dt className="text-[var(--text-3)]">{label}</dt>
+      <dd className="font-semibold tabular-nums text-[var(--text-2)]">{value}</dd>
+    </div>
+  );
 
   return (
     <Card title={t('section.host')}>
@@ -50,6 +69,36 @@ export function HostPanel() {
           </Select>
         </Field>
 
+        {/* ---------------------------------------------------------- CPU */}
+        <div className="grid grid-cols-[1fr_auto] gap-3">
+          <Field label={t('host.cpu')}>
+            <Select value={state.cpuId} onChange={(v) => state.set('cpuId', v)}>
+              {CPU_SEGMENTS.map((seg) => (
+                <optgroup key={seg} label={t(`host.segment.${seg}`)}>
+                  {CPUS.filter((c) => c.segment === seg).map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.label} — {c.cores}C, {c.idleW} W idle
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </Select>
+          </Field>
+          <Field label={t('host.sockets')}>
+            <Select
+              value={String(state.cpuSockets)}
+              onChange={(v) => state.set('cpuSockets', Number(v))}
+            >
+              {[1, 2, 4, 8].map((n) => (
+                <option key={n} value={n}>
+                  {n}×
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+
+        {/* --------------------------------------------------------- RAM */}
         <div className="grid grid-cols-2 gap-3">
           <Field label={t('host.ramType')}>
             <Select
@@ -112,43 +161,89 @@ export function HostPanel() {
           </Field>
         </div>
 
-        {/* The two numbers the specification actually buys you. */}
+        {/* --------------------------------------------- chassis & drives */}
+        <div className="grid grid-cols-2 gap-3">
+          <Field label={t('host.cooling')} help={t('host.coolingHelp')}>
+            <Select value={state.coolingId} onChange={(v) => state.set('coolingId', v)}>
+              {COOLING.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {t(c.labelKey)} — {c.watts} W
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label={t('host.board')}>
+            <Select value={state.boardId} onChange={(v) => state.set('boardId', v)}>
+              {BOARDS.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {t(b.labelKey)} — {b.watts} W
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+
+        <div className="grid grid-cols-[1fr_auto] gap-3">
+          <Field label={t('host.drives')}>
+            <Select value={state.driveId} onChange={(v) => state.set('driveId', v)}>
+              {DRIVES.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {t(d.labelKey)} — {d.idleW} W
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label={t('host.driveCount')}>
+            <NumberInput
+              value={state.driveCount}
+              onChange={(v) => state.set('driveCount', Math.max(0, v ?? 0))}
+              min={0}
+              step={1}
+            />
+          </Field>
+        </div>
+
+        {/* ------------------------------------------------------ summary */}
         <dl className="grid grid-cols-2 gap-x-4 gap-y-1 rounded-[var(--radius-sm)] bg-[var(--surface-2)] p-2.5 text-[11px]">
-          <div className="flex justify-between gap-2">
-            <dt className="text-[var(--text-3)]">{t('host.bandwidth')}</dt>
-            <dd className="font-semibold tabular-nums text-[var(--text-2)]">
-              {num(bandwidth, language, 1)} GB/s
-            </dd>
-          </div>
-          <div className="flex justify-between gap-2">
-            <dt className="text-[var(--text-3)]">{t('host.ramIdlePower')}</dt>
-            <dd className="font-semibold tabular-nums text-[var(--text-2)]">
-              {num(idlePower.idleW, language, 1)} W
-            </dd>
-          </div>
-          <div className="flex justify-between gap-2">
-            <dt className="text-[var(--text-3)]">{t('host.ramFullPower')}</dt>
-            <dd className="font-semibold tabular-nums text-[var(--text-2)]">
-              {num(fullPower.totalW, language, 1)} W
-            </dd>
-          </div>
-          {/* Shown here only when the editable field below is hidden, so the
-              same figure never appears twice. */}
-          {!state.advanced && (
-            <div className="flex justify-between gap-2">
-              <dt className="text-[var(--text-3)]">{t('host.baseOverhead')}</dt>
-              <dd className="font-semibold tabular-nums text-[var(--text-2)]">
-                {num(state.hostBaseOverheadW, language, 0)} W
-              </dd>
-            </div>
+          {row(t('host.bandwidth'), `${num(bandwidth, language, 1)} GB/s`)}
+          {row(
+            `${t('host.cpu')} ${state.cpuSockets > 1 ? `${state.cpuSockets}×` : ''}`,
+            `${num(parts.cpuIdleW * parts.sockets, language, 0)} W`,
           )}
+          {row(t('host.ramIdlePower'), `${num(idlePower.idleW, language, 1)} W`)}
+          {row(t('host.ramFullPower'), `${num(fullPower.totalW, language, 1)} W`)}
+          {row(t('host.cooling'), `${num(parts.coolingW, language, 0)} W`)}
+          {row(t('host.board'), `${num(parts.boardW, language, 0)} W`)}
         </dl>
 
+        <div className="flex items-baseline justify-between gap-2 text-[12px]">
+          <span className="font-medium text-[var(--text-2)]">{t('host.baseOverhead')}</span>
+          <span className="font-semibold tabular-nums text-[var(--text)]">
+            {num(host.baseOverheadW, language, 0)} W
+          </span>
+        </div>
+
         {state.advanced && (
-          <Field label={t('host.baseOverhead')} help={t('host.baseOverheadHelp')}>
+          <Field
+            label={t('host.overrideBase')}
+            help={t('host.overrideBaseHelp')}
+            hint={
+              overridden ? (
+                <button
+                  type="button"
+                  className="cursor-pointer text-[11px] font-medium text-[var(--accent)] hover:underline"
+                  onClick={() => state.set('hostBaseOverheadOverrideW', null)}
+                >
+                  {t('cost.resetPreset')}
+                </button>
+              ) : undefined
+            }
+          >
             <NumberInput
-              value={state.hostBaseOverheadW}
-              onChange={(v) => state.set('hostBaseOverheadW', v ?? 0)}
+              value={host.baseOverheadW}
+              onChange={(v) =>
+                state.set('hostBaseOverheadOverrideW', v === computed ? null : v)
+              }
               min={0}
               step={5}
               suffix="W"
@@ -164,7 +259,17 @@ export function HostPanel() {
             })}
           </Note>
         )}
+
+        {getCpu(state.cpuId).segment === 'server' && state.cpuSockets > 1 && (
+          <Note tone="warn">
+            {t('host.serverIdleNote', {
+              watts: num(host.baseOverheadW + idlePower.idleW, language, 0),
+            })}
+          </Note>
+        )}
       </div>
     </Card>
   );
 }
+
+export { Button };

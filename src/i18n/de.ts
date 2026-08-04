@@ -114,6 +114,23 @@ export const de: Translations = {
     desktop: 'Desktop',
     workstation: 'Workstation',
     server: 'Server (Dual-Socket)',
+    cpu: 'CPU',
+    sockets: 'Sockel',
+    segment: {
+      mobile: 'Mobil / SoC',
+      desktop: 'Desktop',
+      workstation: 'Workstation',
+      server: 'Server',
+    },
+    cooling: 'Kühlung / Gehäuse',
+    coolingHelp: 'Rack-Lüfter sind die Hauptursache dafür, dass ein Server deutlich höher im Leerlauf liegt als ein Desktop.',
+    board: 'Mainboard',
+    drives: 'Laufwerke',
+    driveCount: 'Anzahl',
+    overrideBase: 'Übrige Systemlast überschreiben',
+    overrideBaseHelp: 'Ersetzt die Summe aus CPU, Board, Kühlung und Laufwerken durch einen gemessenen Wert.',
+    serverIdleNote:
+      'Dieses System zieht rund {{watts}} W, bevor die GPU überhaupt rechnet — Mehrsockel-CPUs und Rack-Kühlung dominieren die Grundlast.',
     ramType: 'Speichertyp',
     ramSpeed: 'Takt',
     channels: 'Kanäle',
@@ -127,6 +144,30 @@ export const de: Translations = {
     baseOverheadHelp: 'CPU im Leerlauf, Mainboard und VRM, Laufwerke, Lüfter — ohne RAM, der separat gerechnet wird.',
     idleDominatesNote:
       '{{modules}} Module ziehen dauerhaft {{watts}} W, unabhängig davon, wie viel Speicher das Modell tatsächlich braucht. Diese Grundlast steckt in jedem einzelnen Token.',
+  },
+
+  cooling: {
+    passive: 'Passiv / lüfterlos',
+    laptop: 'Laptop-Lüfter',
+    desktopAir: 'Desktop Luftkühlung',
+    desktopHighflow: 'Desktop, viele Lüfter',
+    aio: 'AIO-Wasserkühlung',
+    server4u: 'Server 4U / Tower',
+    server2u: 'Server 2U',
+    server1u: 'Server 1U',
+  },
+
+  board: {
+    laptop: 'Laptop-Board',
+    desktop: 'Desktop-Board',
+    workstation: 'Workstation-Board',
+    server: 'Server-Board (BMC)',
+  },
+
+  drive: {
+    nvme: 'NVMe-SSD',
+    sataSsd: 'SATA-SSD',
+    hdd: 'Festplatte',
   },
 
   quant: {
@@ -178,6 +219,8 @@ export const de: Translations = {
     idle: 'π₀ (Ruheleistung)',
     psu: 'Netzteil-Wirkungsgrad',
     pue: 'PUE',
+    pueHelp: 'Preset wählen oder rechts einen eigenen Wert eintragen.',
+    pueCustom: 'Eigener Wert',
     hostOverhead: 'Host-Overhead',
     calibrate: 'Koeffizienten auf Hardware-Standard zurücksetzen',
     decomposition: 'Energiezerlegung',
@@ -220,6 +263,9 @@ export const de: Translations = {
     kvCache: 'KV-Cache',
     activations: 'Aktivierungen',
     cudaContext: 'CUDA-Kontext',
+    rocmContext: 'ROCm-/HIP-Kontext',
+    levelZeroContext: 'Level-Zero-Kontext',
+    metalContext: 'Metal-Kontext',
     framework: 'Framework-Overhead',
     performance: 'Leistung',
     generationSpeed: 'Generierungsgeschwindigkeit',

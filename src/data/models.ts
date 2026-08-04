@@ -753,6 +753,33 @@ export const MODELS: ModelSpec[] = [
 
   // ------------------------------------------------------------ Moonshot
   {
+    id: 'kimi-k3',
+    name: 'Kimi K3 (2.78T-A64B)',
+    family: 'Moonshot',
+    paramsTotal: 2779.932e9,
+    // 18 of 896 experts active (top-16 routed + 2 shared) across 92 MoE
+    // layers. Estimated from the architecture; Moonshot has not published an
+    // active-parameter figure.
+    paramsActive: 64e9,
+    paramsActiveEstimated: true,
+    numLayers: 93,
+    hiddenSize: 7168,
+    numAttentionHeads: 96,
+    // Reports 96 KV heads, but kv_lora_rank makes this MLA — the KV cache is
+    // the compressed latent, not per-head K/V.
+    numKeyValueHeads: 96,
+    headDim: 128,
+    vocabSize: 163840,
+    maxContext: 1048576,
+    attention: 'mla',
+    kvLoraRank: 512,
+    qkRopeHeadDim: 64,
+    moe: { numExperts: 896, expertsPerToken: 16, numSharedExperts: 2, firstKDenseReplace: 1 },
+    source: 'catalog',
+    hfRepo: 'moonshotai/Kimi-K3',
+    note: 'model.note.mla',
+  },
+  {
     id: 'kimi-k2.6',
     name: 'Kimi K2.6',
     family: 'Moonshot',

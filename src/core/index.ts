@@ -29,6 +29,7 @@ export function runCalculation(input: CalcInput): CalcResult {
     kvQuant,
     workload,
     hardware.numGpus,
+    hardware.gpu.vendor,
   );
 
   const totalVramBytes = hardware.gpu.vramGb * GB * hardware.numGpus;

@@ -4,14 +4,16 @@ import type {
   ApiPrice,
   CalcInput,
   EnergyMode,
+  HostComponents,
   HostSpec,
   ModelSpec,
   Parallelism,
   Region,
   Runtime,
 } from '../core/types';
-import { ramBandwidthGBs } from '../core/host';
+import { hostBaseOverheadW, ramBandwidthGBs } from '../core/host';
 import { getKvQuant, getQuant } from '../core/quant';
+import { getBoard, getCooling, getCpu, getDrive } from '../data/cpu';
 import { API_PRICES, MODEL_TO_API_PRICE } from '../data/apiPrices';
 import { GPUS, getGpu } from '../data/gpus';
 import { MODELS, getModel } from '../data/models';
@@ -46,7 +48,14 @@ export interface AppState {
   ramChannels: number;
   ramCapacityGb: number;
   ramModules: number;
-  hostBaseOverheadW: number;
+  cpuId: string;
+  cpuSockets: number;
+  boardId: string;
+  coolingId: string;
+  driveId: string;
+  driveCount: number;
+  /** Manual override of the computed component sum; null means "derive it". */
+  hostBaseOverheadOverrideW: number | null;
 
   // energy
   energyMode: EnergyMode;
@@ -116,7 +125,13 @@ const DEFAULTS: AppState = {
   ramChannels: 2,
   ramCapacityGb: 32,
   ramModules: 2,
-  hostBaseOverheadW: 55,
+  cpuId: 'ryzen7-9700x',
+  cpuSockets: 1,
+  boardId: 'desktop',
+  coolingId: 'desktop-air',
+  driveId: 'nvme',
+  driveCount: 1,
+  hostBaseOverheadOverrideW: null,
   // Databricks measured ~60% MBU for batch-1 single-GPU decode; well-tuned
   // setups reach 70-90%. 0.70 is a defensible middle.
   mbu: 0.7,
@@ -229,7 +244,18 @@ export function effectiveRegion(state: AppState): Region {
   };
 }
 
+export function hostComponents(state: AppState): HostComponents {
+  return {
+    cpuIdleW: getCpu(state.cpuId).idleW,
+    sockets: state.cpuSockets,
+    boardW: getBoard(state.boardId).watts,
+    coolingW: getCooling(state.coolingId).watts,
+    drivesW: getDrive(state.driveId).idleW * state.driveCount,
+  };
+}
+
 export function hostSpec(state: AppState): HostSpec {
+  const components = hostComponents(state);
   return {
     ram: {
       typeId: state.ramTypeId,
@@ -238,7 +264,9 @@ export function hostSpec(state: AppState): HostSpec {
       totalCapacityGb: state.ramCapacityGb,
       modules: state.ramModules,
     },
-    baseOverheadW: state.hostBaseOverheadW,
+    // Derived from the itemised components unless explicitly overridden.
+    baseOverheadW: state.hostBaseOverheadOverrideW ?? hostBaseOverheadW(components),
+    components,
   };
 }
 
@@ -301,7 +329,8 @@ const SHARE_KEYS = [
   'contextLength', 'promptTokens', 'outputTokens', 'batchSize', 'runtime',
   'allowOffload', 'mbu', 'mfu', 'energyMode', 'psuEfficiency', 'pue',
   'hostPresetId', 'ramTypeId', 'ramSpeedMTps', 'ramChannels', 'ramCapacityGb',
-  'ramModules', 'hostBaseOverheadW',
+  'ramModules', 'cpuId', 'cpuSockets', 'boardId', 'coolingId', 'driveId',
+  'driveCount', 'hostBaseOverheadOverrideW',
   'hostOverheadW', 'regionId', 'customPricePerKWh', 'customGridIntensity',
   'inputRatio', 'hardwareCapex', 'dailyTokens', 'apiPriceId', 'advanced',
 ] as const satisfies readonly (keyof AppState)[];
@@ -325,6 +354,7 @@ const NULLABLE_NUMBER_KEYS = new Set<keyof AppState>([
   'hardwareCapex',
   'customPricePerKWh',
   'customGridIntensity',
+  'hostBaseOverheadOverrideW',
   'epsFlopPJ',
   'epsMopPJ',
 ]);

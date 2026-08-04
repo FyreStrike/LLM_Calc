@@ -206,6 +206,44 @@ export interface RamSpec {
   modules: number;
 }
 
+export interface CpuSpec {
+  id: string;
+  label: string;
+  vendor: 'intel' | 'amd' | 'apple' | 'other';
+  segment: 'mobile' | 'desktop' | 'workstation' | 'server';
+  cores: number;
+  tdpW: number;
+  /** Package power at idle. Estimated — vendors do not publish this. */
+  idleW: number;
+}
+
+export interface CoolingSpec {
+  id: string;
+  labelKey: string;
+  watts: number;
+}
+
+export interface DriveSpec {
+  id: string;
+  labelKey: string;
+  idleW: number;
+}
+
+/**
+ * The non-RAM, non-GPU parts of the host, itemised.
+ *
+ * A single overhead figure cannot span this range: a laptop and a dual-socket
+ * 1U server differ by an order of magnitude, and most of the gap is CPU idle
+ * and chassis airflow rather than anything the model does.
+ */
+export interface HostComponents {
+  cpuIdleW: number;
+  sockets: number;
+  boardW: number;
+  coolingW: number;
+  drivesW: number;
+}
+
 export interface HostSpec {
   ram: RamSpec;
   /**
@@ -213,6 +251,8 @@ export interface HostSpec {
    * fans. RAM is excluded because it is costed separately.
    */
   baseOverheadW: number;
+  /** Itemisation behind `baseOverheadW`, for display. */
+  components?: HostComponents;
 }
 
 export type Runtime = 'vllm' | 'llamacpp' | 'transformers';

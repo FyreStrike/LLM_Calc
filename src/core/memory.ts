@@ -5,14 +5,45 @@ import type {
   ModelSpec,
   QuantSpec,
   Runtime,
+  Vendor,
   Workload,
 } from './types';
 
 export const GB = 1024 ** 3;
 export const MB = 1024 ** 2;
 
-/** Fixed CUDA context cost per GPU. Does not scale with model size. */
-export const CUDA_CONTEXT_BYTES = 400 * MB;
+/**
+ * Fixed per-device runtime context, independent of model size.
+ *
+ * This is not "CUDA context" outside NVIDIA: AMD allocates a HIP/ROCm context,
+ * Intel a Level Zero context, and Apple a Metal device whose unified memory
+ * means there is no separate device-side allocation of comparable size. The
+ * cost differs enough to be worth distinguishing rather than labelling every
+ * platform after NVIDIA's.
+ */
+export const RUNTIME_CONTEXT_BYTES: Record<Vendor, number> = {
+  nvidia: 400 * MB,
+  amd: 350 * MB,
+  intel: 300 * MB,
+  apple: 100 * MB,
+};
+
+export function runtimeContextBytes(vendor: Vendor, numGpus: number): number {
+  return RUNTIME_CONTEXT_BYTES[vendor] * numGpus;
+}
+
+/** i18n key naming the context for this vendor's stack. */
+export function runtimeContextLabelKey(vendor: Vendor): string {
+  return {
+    nvidia: 'results.cudaContext',
+    amd: 'results.rocmContext',
+    intel: 'results.levelZeroContext',
+    apple: 'results.metalContext',
+  }[vendor];
+}
+
+/** @deprecated Use `runtimeContextBytes`; kept for the NVIDIA default. */
+export const CUDA_CONTEXT_BYTES = RUNTIME_CONTEXT_BYTES.nvidia;
 
 /**
  * Per-layer transient activation tensors held live during a forward pass:
@@ -172,11 +203,12 @@ export function computeMemory(
   kvQuant: KvQuantSpec,
   workload: Workload,
   numGpus: number,
+  vendor: Vendor = 'nvidia',
 ): MemoryBreakdown {
   const weights = weightBytes(model, quant);
   const kv = kvCacheBytes(model, kvQuant, workload.contextLength, workload.batchSize);
   const activations = activationBytes(model, workload);
-  const cudaContext = CUDA_CONTEXT_BYTES * numGpus;
+  const cudaContext = runtimeContextBytes(vendor, numGpus);
   const framework = frameworkOverheadBytes(workload.runtime, weights + kv);
 
   return {

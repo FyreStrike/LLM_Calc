@@ -20,6 +20,7 @@ export function EnergyCostPanel() {
   const baseRegion = getRegion(state.regionId) ?? REGIONS[0];
   const region = effectiveRegion(state);
   const isCustomPrice = state.customPricePerKWh !== null;
+  const matchedPue = PUE_PRESETS.find((p) => Math.abs(p.value - state.pue) < 1e-9);
 
   // Refresh prices once on mount; the service falls back to cache, then to the
   // bundled snapshot, so this can fail silently without breaking the page.
@@ -83,18 +84,30 @@ export function EnergyCostPanel() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-3">
-          <Field label={t('energy.pue')}>
+        <div className="grid grid-cols-[1fr_auto] gap-3">
+          <Field label={t('energy.pue')} help={t('energy.pueHelp')}>
             <Select
-              value={String(state.pue)}
+              // A custom value belongs to no preset, so the select falls back
+              // to a placeholder rather than mislabelling it.
+              value={matchedPue ? String(matchedPue.value) : ''}
               onChange={(v) => state.set('pue', Number(v))}
             >
+              {!matchedPue && <option value="">{t('energy.pueCustom')}</option>}
               {PUE_PRESETS.map((p) => (
                 <option key={p.id} value={p.value}>
                   {t(p.labelKey)}
                 </option>
               ))}
             </Select>
+          </Field>
+          <Field label="&nbsp;">
+            <NumberInput
+              value={state.pue}
+              onChange={(v) => state.set('pue', Math.max(1, v ?? 1))}
+              min={1}
+              max={3}
+              step={0.01}
+            />
           </Field>
         </div>
 
