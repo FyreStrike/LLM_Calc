@@ -2,7 +2,6 @@
 
 [![CI](https://github.com/FyreStrike/LLM_Calc/actions/workflows/ci.yml/badge.svg)](https://github.com/FyreStrike/LLM_Calc/actions/workflows/ci.yml)
 [![Deploy](https://github.com/FyreStrike/LLM_Calc/actions/workflows/deploy.yml/badge.svg)](https://github.com/FyreStrike/LLM_Calc/actions/workflows/deploy.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 **Live: https://fyrestrike.github.io/LLM_Calc/**
 
@@ -109,7 +108,11 @@ most improve the tool.
 
 ## License
 
-[MIT](LICENSE).
+**None yet — all rights reserved.**
+
+A private project; no licence has been chosen so far. Stated deliberately
+rather than left to omission, since without one the default applies: the code
+may be read but not reused, modified or redistributed. A licence may follow.
 
 ## Context
 
