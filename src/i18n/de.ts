@@ -101,7 +101,7 @@ export const de: Translations = {
       blackwellEstimate: 'Durchsatzwerte für Consumer-Blackwell sind nicht vollständig verifiziert.',
       proBlackwellEstimate: 'FP16-Durchsatz aus der SM-Anzahl extrapoliert; nicht verifiziert.',
       b200Capacity: 'Quellen widersprechen sich: 180 GB / 7,7 TB/s gegenüber 192 GB / 8,0 TB/s.',
-      gb10: 'LPDDR5x Unified Memory: sehr große Kapazität, aber nur 273 GB/s.',
+      gb10: 'LPDDR5x Unified Memory: sehr große Kapazität bei nur 273 GB/s. SoC — die 140 W decken CPU und GPU gemeinsam ab.',
       m3ProRegression: 'Bandbreite gegenüber dem M2 Pro (200 GB/s) auf 150 GB/s gesunken.',
       appleBinning: 'Die Bandbreite hängt von der GPU-Kernanzahl des jeweiligen Bins ab.',
       unverified: 'Spezifikationen nicht unabhängig verifiziert.',
@@ -130,6 +130,8 @@ export const de: Translations = {
     driveCount: 'Anzahl',
     overrideBase: 'Übrige Systemlast überschreiben',
     overrideBaseHelp: 'Ersetzt die Summe aus CPU, Board, Kühlung und Laufwerken durch einen gemessenen Wert.',
+    socNote:
+      '{{gpu}} ist ein SoC — CPU und GPU teilen sich Die und Leistungsbudget. Die TDP der GPU deckt beides bereits ab, eine separate CPU würde doppelt gezählt.',
     serverIdleNote:
       'Dieses System zieht rund {{watts}} W, bevor die GPU überhaupt rechnet — Mehrsockel-CPUs und Rack-Kühlung dominieren die Grundlast.',
     ramType: 'Speichertyp',
@@ -242,7 +244,7 @@ export const de: Translations = {
     inputRatioHelp: 'Input-Token sind meist deutlich günstiger als Output. Ohne das Verhältnis verzerrt der Vergleich.',
     hardwareCapex: 'Hardwarekosten',
     hardwareCapexHelp: 'Aktiviert die Amortisationsrechnung. Leer lassen, um nur die Grenzkosten zu vergleichen.',
-    dailyTokens: 'Token pro Tag',
+    dailyTokens: 'Mio. Token pro Tag',
     apiModel: 'Vergleich mit API',
     apiAuto: 'Automatisch — passend zum Modell',
     apiNone: 'Kein Vergleich',
@@ -313,7 +315,9 @@ export const de: Translations = {
     offloading:
       '{{percent}} % der Gewichte werden aus dem Host-RAM geladen. Mit deutlichem Einbruch rechnen — Offloading addiert Zeit, statt Geschwindigkeit zu teilen.',
     unifiedMemory:
-      'Unified Memory: standardmäßig sind etwa 75 % für die GPU adressierbar, erhöhbar über iogpu.wired_limit_mb.',
+      'Unified Memory unter Metal: standardmäßig sind etwa {{percent}} % adressierbar ({{usable}} von {{total}} GB), erhöhbar über iogpu.wired_limit_mb.',
+    unifiedMemoryCoherent:
+      'Kohärenter Unified Memory: rund {{usable}} von {{total}} GB sind für das Modell nutzbar — hier gilt Apples 75-%-Grenze nicht, nur ein Reserve-Anteil für das Betriebssystem.',
     contextExceedsMax: 'Der Kontext übersteigt das trainierte Maximum des Modells von {{max}} Token.',
     mlaCache:
       'MLA-Modell: Der KV-Cache ist der komprimierte Latent, nicht K/V pro Head. Manche Runtimes materialisieren volles K/V und verlieren diesen Vorteil.',

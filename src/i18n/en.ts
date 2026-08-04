@@ -99,7 +99,7 @@ export const en = {
       blackwellEstimate: 'Consumer Blackwell throughput figures are not fully verified.',
       proBlackwellEstimate: 'FP16 throughput extrapolated from SM count; not verified.',
       b200Capacity: 'Sources disagree between 180 GB / 7.7 TB/s and 192 GB / 8.0 TB/s.',
-      gb10: 'LPDDR5x unified memory: huge capacity, but only 273 GB/s.',
+      gb10: 'LPDDR5x unified memory: huge capacity at only 273 GB/s. An SoC — the 140 W covers CPU and GPU together.',
       m3ProRegression: 'Bandwidth regressed from the M2 Pro (200 GB/s) to 150 GB/s.',
       appleBinning: 'Bandwidth depends on the GPU core count of the specific bin.',
       unverified: 'Specifications not independently verified.',
@@ -128,6 +128,8 @@ export const en = {
     driveCount: 'Count',
     overrideBase: 'Override rest of system',
     overrideBaseHelp: 'Replaces the sum of CPU, board, cooling and drives with a measured figure.',
+    socNote:
+      '{{gpu}} is an SoC — CPU and GPU share the die and the power budget. The GPU’s TDP already covers both, so adding a separate CPU would double-count it.',
     serverIdleNote:
       'This system draws about {{watts}} W before the GPU computes anything — multi-socket CPUs and rack cooling dominate the standing load.',
     ramType: 'Memory type',
@@ -240,7 +242,7 @@ export const en = {
     inputRatioHelp: 'Input tokens are usually far cheaper than output. Ignoring the mix skews the comparison.',
     hardwareCapex: 'Hardware cost',
     hardwareCapexHelp: 'Enables the break-even calculation. Leave empty to compare marginal cost only.',
-    dailyTokens: 'Tokens per day',
+    dailyTokens: 'Million tokens per day',
     apiModel: 'Compare against API',
     apiAuto: 'Automatic — matches the model',
     apiNone: 'No comparison',
@@ -311,7 +313,9 @@ export const en = {
     offloading:
       '{{percent}}% of the weights are served from host RAM. Expect a large slowdown — offloading adds time rather than dividing speed.',
     unifiedMemory:
-      'Unified memory: roughly 75% is addressable by the GPU by default, raisable via iogpu.wired_limit_mb.',
+      'Unified memory under Metal: about {{percent}}% is addressable by default ({{usable}} of {{total}} GB), raisable via iogpu.wired_limit_mb.',
+    unifiedMemoryCoherent:
+      'Coherent unified memory: roughly {{usable}} of {{total}} GB are usable for the model — Apple’s 75% cap does not apply here, only an OS reserve.',
     contextExceedsMax: 'Context exceeds the model’s trained maximum of {{max}} tokens.',
     mlaCache:
       'MLA model: the KV cache is the compressed latent, not per-head K/V. Some runtimes materialize full K/V and lose this advantage.',

@@ -127,6 +127,21 @@ export interface GpuSpec {
   priceUsd?: number;
   /** Unified memory (Apple) — usable fraction is lower than total. */
   unified?: boolean;
+  /**
+   * System-on-chip: the CPU shares the die and the power budget with the GPU,
+   * so `tdpW` already covers both. Host modelling must not add a separate CPU
+   * on top, or it double-counts.
+   */
+  soc?: boolean;
+  /**
+   * Share of `vramGb` the runtime can actually allocate, 0..1. Defaults to 1
+   * for discrete cards.
+   *
+   * This is runtime-specific, not a property of unified memory as such: Metal
+   * caps allocation near 75% by default, while the Grace-Blackwell coherent
+   * memory on DGX Spark hands over nearly all of it under Linux.
+   */
+  usableMemoryFraction?: number;
   architecture?: string;
   /** Whether NVLink is available for multi-GPU tensor parallelism. */
   nvlink?: boolean;

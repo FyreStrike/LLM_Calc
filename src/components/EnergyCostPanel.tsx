@@ -281,12 +281,15 @@ export function EnergyCostPanel() {
               placeholder={gpu.priceUsd ? String(gpu.priceUsd * state.numGpus) : '—'}
             />
           </Field>
+          {/* Entered in millions: a realistic figure is eight or nine digits,
+              which is unreadable and easy to mistype by a factor of ten. */}
           <Field label={t('cost.dailyTokens')}>
             <NumberInput
-              value={state.dailyTokens}
-              onChange={(v) => state.set('dailyTokens', v ?? 0)}
+              value={state.dailyTokens / 1e6}
+              onChange={(v) => state.set('dailyTokens', Math.max(0, (v ?? 0) * 1e6))}
               min={0}
-              step={100000}
+              step={0.5}
+              suffix="Mio."
             />
           </Field>
         </div>

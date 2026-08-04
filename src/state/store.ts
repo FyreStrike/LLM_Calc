@@ -277,10 +277,20 @@ export function effectiveRegion(state: AppState): Region {
   };
 }
 
+/** True when CPU and GPU share a die, so the GPU's TDP already covers both. */
+export function isSocPlatform(state: AppState): boolean {
+  return (getGpu(state.gpuId) ?? GPUS[0]).soc === true;
+}
+
 export function hostComponents(state: AppState): HostComponents {
+  // On an SoC — Apple Silicon, DGX Spark — the CPU sits on the same die and
+  // inside the same power budget as the GPU. Adding a discrete CPU's idle
+  // draw on top would double-count it.
+  const soc = isSocPlatform(state);
+
   return {
-    cpuIdleW: getCpu(state.cpuId).idleW,
-    sockets: state.cpuSockets,
+    cpuIdleW: soc ? 0 : getCpu(state.cpuId).idleW,
+    sockets: soc ? 1 : state.cpuSockets,
     boardW: getBoard(state.boardId).watts,
     drivesW: getDrive(state.driveId).idleW * state.driveCount,
   };

@@ -1,4 +1,4 @@
-import type { GpuSpec } from '../core/types';
+﻿import type { GpuSpec } from '../core/types';
 
 /**
  * Hardware reference database.
@@ -331,6 +331,12 @@ export const GPUS: GpuSpec[] = [
     idleW: 15,
     priceUsd: 3999,
     unified: true,
+    soc: true,
+    // Grace-Blackwell coherent memory under Linux is not subject to Metal's
+    // 75% cap: nearly the whole 128 GB pool is allocatable, leaving only an
+    // OS reserve. Confirmed by hands-on testing rather than assumed from the
+    // Apple behaviour.
+    usableMemoryFraction: 0.95,
     note: 'gpu.note.gb10',
   },
 
@@ -387,24 +393,26 @@ export const GPUS: GpuSpec[] = [
   },
 
   // ---------------------------------------------------------------- Apple Silicon
-  // Unified memory: the GPU can address roughly 75% by default (raisable via
-  // iogpu.wired_limit_mb). FP16 figures are approximate; decode is bandwidth-
-  // bound on these parts, so bandwidth is the number that actually matters.
-  { id: 'm1', name: 'Apple M1', vendor: 'apple', vramGb: 16, bandwidthGBs: 68.25, fp16TFlops: 5.2, tdpW: 20, idleW: 3, unified: true },
-  { id: 'm1-pro', name: 'Apple M1 Pro', vendor: 'apple', vramGb: 32, bandwidthGBs: 200, fp16TFlops: 10.4, tdpW: 30, idleW: 4, unified: true },
-  { id: 'm1-max', name: 'Apple M1 Max', vendor: 'apple', vramGb: 64, bandwidthGBs: 400, fp16TFlops: 20.8, tdpW: 60, idleW: 5, unified: true },
-  { id: 'm1-ultra', name: 'Apple M1 Ultra', vendor: 'apple', vramGb: 128, bandwidthGBs: 800, fp16TFlops: 41.6, tdpW: 120, idleW: 8, unified: true },
-  { id: 'm2', name: 'Apple M2', vendor: 'apple', vramGb: 24, bandwidthGBs: 100, fp16TFlops: 7.1, tdpW: 20, idleW: 3, unified: true },
-  { id: 'm2-pro', name: 'Apple M2 Pro', vendor: 'apple', vramGb: 32, bandwidthGBs: 200, fp16TFlops: 13.6, tdpW: 30, idleW: 4, unified: true },
-  { id: 'm2-max', name: 'Apple M2 Max', vendor: 'apple', vramGb: 96, bandwidthGBs: 400, fp16TFlops: 27.2, tdpW: 60, idleW: 5, unified: true },
-  { id: 'm2-ultra', name: 'Apple M2 Ultra', vendor: 'apple', vramGb: 192, bandwidthGBs: 800, fp16TFlops: 54.4, tdpW: 120, idleW: 8, unified: true },
-  { id: 'm3', name: 'Apple M3', vendor: 'apple', vramGb: 24, bandwidthGBs: 100, fp16TFlops: 7.1, tdpW: 20, idleW: 3, unified: true },
-  { id: 'm3-pro', name: 'Apple M3 Pro', vendor: 'apple', vramGb: 36, bandwidthGBs: 150, fp16TFlops: 12.8, tdpW: 30, idleW: 4, unified: true, note: 'gpu.note.m3ProRegression' },
-  { id: 'm3-max', name: 'Apple M3 Max', vendor: 'apple', vramGb: 128, bandwidthGBs: 400, fp16TFlops: 28.4, tdpW: 65, idleW: 5, unified: true, note: 'gpu.note.appleBinning' },
-  { id: 'm3-ultra', name: 'Apple M3 Ultra', vendor: 'apple', vramGb: 512, bandwidthGBs: 819, fp16TFlops: 56.8, tdpW: 140, idleW: 8, unified: true },
-  { id: 'm4', name: 'Apple M4', vendor: 'apple', vramGb: 32, bandwidthGBs: 120, fp16TFlops: 8.5, tdpW: 22, idleW: 3, unified: true },
-  { id: 'm4-pro', name: 'Apple M4 Pro', vendor: 'apple', vramGb: 64, bandwidthGBs: 273, fp16TFlops: 17, tdpW: 35, idleW: 4, unified: true },
-  { id: 'm4-max', name: 'Apple M4 Max', vendor: 'apple', vramGb: 128, bandwidthGBs: 546, fp16TFlops: 34, tdpW: 70, idleW: 5, unified: true, note: 'gpu.note.appleBinning' },
+  // Unified memory: Metal caps GPU allocation near 75% by default, raisable
+  // via iogpu.wired_limit_mb. These are SoCs, so `tdpW` is package power and
+  // already includes the CPU — no separate CPU may be added on top.
+  // FP16 figures are approximate; decode is bandwidth-bound on these parts,
+  // so bandwidth is the number that actually matters.
+  { id: 'm1', name: 'Apple M1', vendor: 'apple', vramGb: 16, bandwidthGBs: 68.25, fp16TFlops: 5.2, tdpW: 20, idleW: 3, unified: true, soc: true, usableMemoryFraction: 0.75 },
+  { id: 'm1-pro', name: 'Apple M1 Pro', vendor: 'apple', vramGb: 32, bandwidthGBs: 200, fp16TFlops: 10.4, tdpW: 30, idleW: 4, unified: true, soc: true, usableMemoryFraction: 0.75 },
+  { id: 'm1-max', name: 'Apple M1 Max', vendor: 'apple', vramGb: 64, bandwidthGBs: 400, fp16TFlops: 20.8, tdpW: 60, idleW: 5, unified: true, soc: true, usableMemoryFraction: 0.75 },
+  { id: 'm1-ultra', name: 'Apple M1 Ultra', vendor: 'apple', vramGb: 128, bandwidthGBs: 800, fp16TFlops: 41.6, tdpW: 120, idleW: 8, unified: true, soc: true, usableMemoryFraction: 0.75 },
+  { id: 'm2', name: 'Apple M2', vendor: 'apple', vramGb: 24, bandwidthGBs: 100, fp16TFlops: 7.1, tdpW: 20, idleW: 3, unified: true, soc: true, usableMemoryFraction: 0.75 },
+  { id: 'm2-pro', name: 'Apple M2 Pro', vendor: 'apple', vramGb: 32, bandwidthGBs: 200, fp16TFlops: 13.6, tdpW: 30, idleW: 4, unified: true, soc: true, usableMemoryFraction: 0.75 },
+  { id: 'm2-max', name: 'Apple M2 Max', vendor: 'apple', vramGb: 96, bandwidthGBs: 400, fp16TFlops: 27.2, tdpW: 60, idleW: 5, unified: true, soc: true, usableMemoryFraction: 0.75 },
+  { id: 'm2-ultra', name: 'Apple M2 Ultra', vendor: 'apple', vramGb: 192, bandwidthGBs: 800, fp16TFlops: 54.4, tdpW: 120, idleW: 8, unified: true, soc: true, usableMemoryFraction: 0.75 },
+  { id: 'm3', name: 'Apple M3', vendor: 'apple', vramGb: 24, bandwidthGBs: 100, fp16TFlops: 7.1, tdpW: 20, idleW: 3, unified: true, soc: true, usableMemoryFraction: 0.75 },
+  { id: 'm3-pro', name: 'Apple M3 Pro', vendor: 'apple', vramGb: 36, bandwidthGBs: 150, fp16TFlops: 12.8, tdpW: 30, idleW: 4, unified: true, soc: true, usableMemoryFraction: 0.75, note: 'gpu.note.m3ProRegression' },
+  { id: 'm3-max', name: 'Apple M3 Max', vendor: 'apple', vramGb: 128, bandwidthGBs: 400, fp16TFlops: 28.4, tdpW: 65, idleW: 5, unified: true, soc: true, usableMemoryFraction: 0.75, note: 'gpu.note.appleBinning' },
+  { id: 'm3-ultra', name: 'Apple M3 Ultra', vendor: 'apple', vramGb: 512, bandwidthGBs: 819, fp16TFlops: 56.8, tdpW: 140, idleW: 8, unified: true, soc: true, usableMemoryFraction: 0.75 },
+  { id: 'm4', name: 'Apple M4', vendor: 'apple', vramGb: 32, bandwidthGBs: 120, fp16TFlops: 8.5, tdpW: 22, idleW: 3, unified: true, soc: true, usableMemoryFraction: 0.75 },
+  { id: 'm4-pro', name: 'Apple M4 Pro', vendor: 'apple', vramGb: 64, bandwidthGBs: 273, fp16TFlops: 17, tdpW: 35, idleW: 4, unified: true, soc: true, usableMemoryFraction: 0.75 },
+  { id: 'm4-max', name: 'Apple M4 Max', vendor: 'apple', vramGb: 128, bandwidthGBs: 546, fp16TFlops: 34, tdpW: 70, idleW: 5, unified: true, soc: true, usableMemoryFraction: 0.75, note: 'gpu.note.appleBinning' },
 
   // ---------------------------------------------------------------------- Intel
   {

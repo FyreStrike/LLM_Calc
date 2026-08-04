@@ -2,7 +2,8 @@ import { hostBaseOverheadW, ramBandwidthGBs, ramPower } from '../core/host';
 import { BOARDS, COOLING, CPUS, DRIVES, getCpu } from '../data/cpu';
 import { CHANNEL_OPTIONS, getRamType, HOST_PRESETS, RAM_TYPES } from '../data/ram';
 import { useLanguage, useT } from '../i18n';
-import { hostComponents, hostSpec, useStore } from '../state/store';
+import { GPUS, getGpu } from '../data/gpus';
+import { hostComponents, hostSpec, isSocPlatform, useStore } from '../state/store';
 import { num } from '../ui/format';
 import { Button, Card, Field, NumberInput, Note, Select } from '../ui/primitives';
 
@@ -21,6 +22,8 @@ export function HostPanel() {
   const language = useLanguage((s) => s.language);
   const state = useStore();
 
+  const gpu = getGpu(state.gpuId) ?? GPUS[0];
+  const soc = isSocPlatform(state);
   const host = hostSpec(state);
   const parts = hostComponents(state);
   const ramType = getRamType(state.ramTypeId);
@@ -70,33 +73,39 @@ export function HostPanel() {
         </Field>
 
         {/* ---------------------------------------------------------- CPU */}
-        <div className="grid grid-cols-[1fr_auto] gap-3">
-          <Field label={t('host.cpu')}>
-            <Select value={state.cpuId} onChange={(v) => state.set('cpuId', v)}>
-              {CPU_SEGMENTS.map((seg) => (
-                <optgroup key={seg} label={t(`host.segment.${seg}`)}>
-                  {CPUS.filter((c) => c.segment === seg).map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.label} — {c.cores}C, {c.idleW} W idle
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </Select>
-          </Field>
-          <Field label={t('host.sockets')}>
-            <Select
-              value={String(state.cpuSockets)}
-              onChange={(v) => state.set('cpuSockets', Number(v))}
-            >
-              {[1, 2, 4, 8].map((n) => (
-                <option key={n} value={n}>
-                  {n}×
-                </option>
-              ))}
-            </Select>
-          </Field>
-        </div>
+        {/* Hidden on SoCs: the CPU shares the die and the GPU's power budget,
+            so offering a separate one would only invite double-counting. */}
+        {soc ? (
+          <Note>{t('host.socNote', { gpu: gpu.name })}</Note>
+        ) : (
+          <div className="grid grid-cols-[1fr_auto] gap-3">
+            <Field label={t('host.cpu')}>
+              <Select value={state.cpuId} onChange={(v) => state.set('cpuId', v)}>
+                {CPU_SEGMENTS.map((seg) => (
+                  <optgroup key={seg} label={t(`host.segment.${seg}`)}>
+                    {CPUS.filter((c) => c.segment === seg).map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.label} — {c.cores}C, {c.idleW} W idle
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </Select>
+            </Field>
+            <Field label={t('host.sockets')}>
+              <Select
+                value={String(state.cpuSockets)}
+                onChange={(v) => state.set('cpuSockets', Number(v))}
+              >
+                {[1, 2, 4, 8].map((n) => (
+                  <option key={n} value={n}>
+                    {n}×
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
+        )}
 
         {/* --------------------------------------------------------- RAM */}
         <div className="grid grid-cols-2 gap-3">
@@ -206,10 +215,11 @@ export function HostPanel() {
         {/* ------------------------------------------------------ summary */}
         <dl className="grid grid-cols-2 gap-x-4 gap-y-1 rounded-[var(--radius-sm)] bg-[var(--surface-2)] p-2.5 text-[11px]">
           {row(t('host.bandwidth'), `${num(bandwidth, language, 1)} GB/s`)}
-          {row(
-            `${t('host.cpu')} ${state.cpuSockets > 1 ? `${state.cpuSockets}×` : ''}`,
-            `${num(parts.cpuIdleW * parts.sockets, language, 0)} W`,
-          )}
+          {!soc &&
+            row(
+              `${t('host.cpu')} ${state.cpuSockets > 1 ? `${state.cpuSockets}×` : ''}`,
+              `${num(parts.cpuIdleW * parts.sockets, language, 0)} W`,
+            )}
           {row(t('host.ramIdlePower'), `${num(idlePower.idleW, language, 1)} W`)}
           {row(t('host.ramFullPower'), `${num(fullPower.totalW, language, 1)} W`)}
           {row(t('host.drives'), `${num(parts.drivesW, language, 0)} W`)}

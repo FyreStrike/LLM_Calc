@@ -36,7 +36,7 @@ export function runCalculation(input: CalcInput): CalcResult {
   const usable = usableVramBytes(
     hardware.gpu.vramGb,
     hardware.numGpus,
-    hardware.gpu.unified,
+    hardware.gpu.usableMemoryFraction,
   );
 
   const hostRamType = host ? getRamType(host.ram.typeId) : undefined;
@@ -145,8 +145,17 @@ function collectWarnings(
   }
 
   if (hardware.gpu.unified) {
-    // Metal caps GPU allocation near 75% of unified memory by default.
-    warnings.push({ level: 'info', key: 'warn.unifiedMemory' });
+    const fraction = hardware.gpu.usableMemoryFraction ?? 1;
+    // Apple's Metal default is the restrictive case; Grace-Blackwell is not.
+    warnings.push({
+      level: 'info',
+      key: fraction < 0.9 ? 'warn.unifiedMemory' : 'warn.unifiedMemoryCoherent',
+      values: {
+        percent: Math.round(fraction * 100),
+        usable: Math.round(hardware.gpu.vramGb * fraction),
+        total: hardware.gpu.vramGb,
+      },
+    });
   }
 
   if (workload.contextLength > model.maxContext) {

@@ -3,7 +3,7 @@ import { API_PRICES, MODEL_TO_API_PRICE } from '../../data/apiPrices';
 import { GPUS } from '../../data/gpus';
 import { getModel, MODELS } from '../../data/models';
 import { REGIONS } from '../../data/regions';
-import { GB, kvBytesPerToken, kvCacheBytes } from '../memory';
+import { GB, kvBytesPerToken, kvCacheBytes, usableVramBytes } from '../memory';
 import { QUANTIZATIONS, getKvQuant } from '../quant';
 
 const kvFp16 = getKvQuant('fp16');
@@ -232,6 +232,39 @@ describe('gpu catalog integrity', () => {
   it('marks Apple Silicon as unified memory', () => {
     for (const g of GPUS.filter((x) => x.vendor === 'apple')) {
       expect(g.unified, g.id).toBe(true);
+    }
+  });
+
+  it('marks every integrated part as an SoC', () => {
+    // The CPU shares the die and the power budget, so the host model must not
+    // add a discrete CPU on top of the GPU's TDP.
+    for (const g of GPUS.filter((x) => x.vendor === 'apple')) {
+      expect(g.soc, g.id).toBe(true);
+    }
+    expect(GPUS.find((g) => g.id === 'dgx-spark-gb10')!.soc).toBe(true);
+  });
+
+  it('does not impose Apple’s Metal cap on Grace-Blackwell', () => {
+    // Metal defaults to ~75% of unified memory; the coherent memory on DGX
+    // Spark hands over nearly the whole pool under Linux. Treating both the
+    // same understated the Spark by about 25 GB.
+    const apple = GPUS.find((g) => g.id === 'm3-ultra')!;
+    const spark = GPUS.find((g) => g.id === 'dgx-spark-gb10')!;
+
+    expect(apple.usableMemoryFraction).toBeCloseTo(0.75, 2);
+    expect(spark.usableMemoryFraction).toBeGreaterThan(0.9);
+
+    expect(usableVramBytes(spark.vramGb, 1, spark.usableMemoryFraction) / GB).toBeGreaterThan(
+      120,
+    );
+  });
+
+  it('gives discrete cards their full VRAM', () => {
+    for (const g of GPUS.filter((x) => !x.unified)) {
+      expect(usableVramBytes(g.vramGb, 1, g.usableMemoryFraction) / GB).toBeCloseTo(
+        g.vramGb,
+        3,
+      );
     }
   });
 });

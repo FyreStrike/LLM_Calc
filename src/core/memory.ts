@@ -224,15 +224,18 @@ export function computeMemory(
 /**
  * Memory the runtime can actually address.
  *
- * Apple's unified memory is shared with the OS: the Metal default caps GPU
- * allocation near 75% of total, raisable to ~92% via `iogpu.wired_limit_mb`.
- * Discrete GPUs expose essentially all of their VRAM.
+ * The addressable share is a property of the runtime, not of unified memory in
+ * general — treating every unified device as Apple's 75% was wrong. Metal caps
+ * allocation near 75% by default (raisable via `iogpu.wired_limit_mb`), but the
+ * coherent Grace-Blackwell memory on DGX Spark hands over nearly the full pool
+ * under Linux, and discrete cards expose all of their VRAM.
  */
 export function usableVramBytes(
   vramGb: number,
   numGpus: number,
-  unified: boolean | undefined,
+  usableFraction: number | undefined,
 ): number {
   const raw = vramGb * GB * numGpus;
-  return unified ? raw * 0.75 : raw;
+  const fraction = Math.min(1, Math.max(0, usableFraction ?? 1));
+  return raw * fraction;
 }

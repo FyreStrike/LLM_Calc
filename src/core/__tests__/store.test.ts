@@ -7,6 +7,8 @@ import {
   buildCalcInput,
   DEFAULTS,
   effectiveRegion,
+  hostComponents,
+  isSocPlatform,
   queryToState,
   selectedApiPrice,
   stateToQuery,
@@ -50,6 +52,53 @@ describe('effective region', () => {
     // Someone on fully self-generated power should get 0, not the preset.
     const r = effectiveRegion(base({ customPricePerKWh: 0 }));
     expect(r.pricePerKWh).toBe(0);
+  });
+});
+
+describe('SoC platforms', () => {
+  it('adds no separate CPU draw on an SoC', () => {
+    // Apple Silicon and DGX Spark put the CPU on the GPU's die and inside its
+    // power budget; charging a discrete CPU on top double-counts it.
+    const desktop = hostComponents(base({ gpuId: 'rtx-4090', cpuId: 'ryzen9-9950x' }));
+    const apple = hostComponents(base({ gpuId: 'm3-ultra', cpuId: 'ryzen9-9950x' }));
+    const spark = hostComponents(base({ gpuId: 'dgx-spark-gb10', cpuId: 'xeon-gold-6430' }));
+
+    expect(desktop.cpuIdleW).toBeGreaterThan(0);
+    expect(apple.cpuIdleW).toBe(0);
+    expect(spark.cpuIdleW).toBe(0);
+  });
+
+  it('ignores a stale socket count on an SoC', () => {
+    // Switching from a dual-socket server to a Spark must not keep 2x.
+    const spark = hostComponents(base({ gpuId: 'dgx-spark-gb10', cpuSockets: 2 }));
+    expect(spark.sockets).toBe(1);
+    expect(spark.cpuIdleW * spark.sockets).toBe(0);
+  });
+
+  it('detects SoC platforms and only those', () => {
+    expect(isSocPlatform(base({ gpuId: 'm4-max' }))).toBe(true);
+    expect(isSocPlatform(base({ gpuId: 'dgx-spark-gb10' }))).toBe(true);
+    expect(isSocPlatform(base({ gpuId: 'h100-sxm' }))).toBe(false);
+    expect(isSocPlatform(base({ gpuId: 'mi300x' }))).toBe(false);
+  });
+
+  it('lets a DGX Spark hold a model an Apple-style cap would reject', () => {
+    // ~121 GB usable rather than 96 GB: the difference decides whether a
+    // 100 GB quantised model runs at all.
+    const spark = runCalculation(
+      buildCalcInput(
+        base({
+          gpuId: 'dgx-spark-gb10',
+          numGpus: 1,
+          modelId: 'llama-3.3-70b',
+          quantId: 'q8_0',
+          contextLength: 8192,
+          runtime: 'llamacpp',
+        }),
+      ),
+    );
+    expect(spark.usableVramBytes / 1024 ** 3).toBeGreaterThan(120);
+    expect(spark.fits).toBe(true);
   });
 });
 
