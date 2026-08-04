@@ -1,0 +1,65 @@
+@import 'tailwindcss';
+
+/*
+ * Chart palette.
+ *
+ * Categorical slots are used in fixed order and never cycled. Both modes were
+ * validated (lightness band, chroma floor, adjacent-pair CVD separation,
+ * normal-vision floor, contrast) against the surfaces this app actually
+ * renders on — white in light mode, slate-900 in dark.
+ *
+ * Light mode raises a sub-3:1 contrast warning on aqua, yellow and magenta,
+ * which obliges visible labels: every chart here ships a labelled table of the
+ * same values beneath it, so identity never rests on color alone.
+ */
+:root {
+  color-scheme: light dark;
+
+  --series-1: #2a78d6; /* weights */
+  --series-2: #eb6834; /* KV cache */
+  --series-3: #1baf7a; /* activations */
+  --series-4: #eda100; /* CUDA context */
+  --series-5: #e87ba4; /* framework overhead */
+
+  --status-good: #0ca30c;
+  --status-warning: #fab219;
+  --status-critical: #d03b3b;
+
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --muted: #898781;
+  /* 2px ring that separates overlapping marks from the surface behind them */
+  --surface-ring: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --surface-ring: #0f172a;
+  }
+}
+
+html {
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #f9f9f7;
+  color: #0b0b0b;
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background: #0d0d0d;
+    color: #ffffff;
+  }
+}
