@@ -298,6 +298,8 @@ function CostCard({ result }: { result: CalcResult }) {
           label={t('energy.joulesPerToken')}
           value={num(energy.wallJoulesPerToken, language, 2)}
           unit="J"
+          // Joules are the physical unit; watt-hours are what a bill speaks.
+          sub={`${num(energy.wattHoursPerKTokens, language, 2)} Wh / 1000 tok`}
         />
         <Stat
           label={t('results.perDay')}

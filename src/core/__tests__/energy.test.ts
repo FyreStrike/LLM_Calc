@@ -18,6 +18,9 @@ const h100: GpuSpec = {
   idleW: 75,
   architecture: 'hopper',
   nvlink: true,
+  // Decode power bands differ by segment; without this the fixture would be
+  // costed as a consumer card.
+  segment: 'datacenter',
 };
 
 /** Eurostat H2 2025, household price including all taxes and levies. */

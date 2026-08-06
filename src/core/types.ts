@@ -108,6 +108,8 @@ export interface ModelSpec {
 
 export type Vendor = 'nvidia' | 'amd' | 'apple' | 'intel';
 
+export type GpuSegment = 'consumer' | 'workstation' | 'datacenter' | 'soc';
+
 export interface GpuSpec {
   id: string;
   name: string;
@@ -143,6 +145,11 @@ export interface GpuSpec {
    */
   usableMemoryFraction?: number;
   architecture?: string;
+  /**
+   * Market segment. Decode power as a fraction of TDP differs sharply between
+   * them, so this is not cosmetic — see `decodeTdpFraction`.
+   */
+  segment?: GpuSegment;
   /** Whether NVLink is available for multi-GPU tensor parallelism. */
   nvlink?: boolean;
   note?: string;
@@ -436,6 +443,14 @@ export interface EnergyResult {
   /** Wall-plug energy per token, including PSU, host overhead and PUE. */
   wallJoulesPerToken: number;
   kWhPerMTokens: number;
+  /**
+   * Wall-plug energy in watt-hours per 1000 tokens.
+   *
+   * Joules are the physical unit and match the thesis, but nobody reads an
+   * electricity bill in joules. Per *single* token watt-hours would be
+   * unreadably small (~0.002 Wh), so the practical scale is per thousand.
+   */
+  wattHoursPerKTokens: number;
   /** Sustained wall-plug draw while generating. */
   wallPowerW: number;
   /** Roofline decomposition — populated in roofline mode. */

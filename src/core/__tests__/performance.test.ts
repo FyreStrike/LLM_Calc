@@ -18,6 +18,7 @@ const h100: GpuSpec = {
   idleW: 75,
   architecture: 'hopper',
   nvlink: true,
+  segment: 'datacenter',
 };
 
 const rtx3060: GpuSpec = {

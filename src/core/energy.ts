@@ -3,6 +3,7 @@ import type {
   CoolingSpec,
   EnergyOptions,
   EnergyResult,
+  GpuSegment,
   GpuSpec,
   PerformanceResult,
   Workload,
@@ -29,15 +30,48 @@ import type {
  */
 
 /**
- * The ML.ENERGY benchmark measures LLM decoding at roughly 20-40% of GPU TDP,
- * because low arithmetic intensity leaves most of the compute fabric idle.
- * Prefill saturates the tensor cores and approaches TDP.
+ * Decode power as a fraction of TDP, per market segment.
  *
- * Source: The ML.ENERGY Benchmark, https://arxiv.org/html/2505.06371v1
+ * The ML.ENERGY benchmark measures LLM decoding at 20-40% of TDP, but those
+ * runs are on H100 and B200 parts. Applying that band to consumer cards was
+ * wrong by a factor of two to three: an RTX 4090 measures 250-320 W sustained
+ * during generation, roughly 55-70% of its 450 W rating, not the ~110 W a
+ * 20% fraction predicts.
+ *
+ * The reason the fraction does not transfer is that decode power is dominated
+ * by the memory subsystem, whose draw is roughly absolute rather than
+ * proportional to the thermal rating. Saturating GDDR6X costs much the same
+ * whether the board is rated 450 W or 700 W — so it is a large fraction of a
+ * consumer card's budget and a small one of a datacenter part's.
+ *
+ * The segments differ mainly at the *low* end, not the high one. A loaded
+ * production node running continuous batching does drive an H100 to 600-700 W,
+ * near its rating, so every segment converges toward TDP once the batch is
+ * large enough to keep the compute fabric busy. What differs is batch 1: a
+ * 700 W board has far more headroom to fall into than a 450 W one.
+ *
+ * Anchor points this reproduces:
+ *
+ *   RTX 4090  batch 1    256 W   (measured 250-320 W)
+ *   RTX 4090  batch 256  416 W   (measured 360-410 W)
+ *   H100 SXM  batch 1    262 W   (37% of TDP, ML.ENERGY band 20-40%)
+ *   H100 SXM  batch 256  669 W   (96% of TDP, production observation)
+ *
+ * Sources: ML.ENERGY Benchmark (datacenter, low batch),
+ * https://arxiv.org/html/2505.06371v1
+ * RTX 4090 inference measurements,
+ * https://gigagpu.com/gpu-power-consumption-ai-inference/
+ * and https://blog.easecloud.io/ai-cloud/gpu-for-your-llm-deployment/
  */
-export const DECODE_TDP_FRACTION_MIN = 0.2;
-export const DECODE_TDP_FRACTION_MAX = 0.55;
-export const PREFILL_TDP_FRACTION = 0.85;
+export const DECODE_TDP_FRACTION: Record<GpuSegment, [number, number]> = {
+  consumer: [0.55, 0.92],
+  workstation: [0.45, 0.9],
+  datacenter: [0.3, 0.95],
+  soc: [0.4, 0.85],
+};
+
+/** Prefill is compute-bound and saturates the tensor cores. */
+export const PREFILL_TDP_FRACTION = 0.95;
 
 /**
  * Share of dynamic power attributable to compute vs. data movement when the
@@ -71,12 +105,16 @@ export function defaultEpsMopPJ(gpu: GpuSpec): number {
  * byte fetched. Interpolates between the ML.ENERGY bounds on a log scale,
  * saturating around batch 64.
  */
-function decodeTdpFraction(batchSize: number): number {
-  const span = Math.min(1, Math.log2(1 + batchSize) / Math.log2(1 + 64));
-  return (
-    DECODE_TDP_FRACTION_MIN +
-    (DECODE_TDP_FRACTION_MAX - DECODE_TDP_FRACTION_MIN) * span
-  );
+export function decodeTdpFraction(
+  batchSize: number,
+  segment: GpuSegment = 'consumer',
+): number {
+  const [min, max] = DECODE_TDP_FRACTION[segment];
+  // log2(batch), so batch 1 sits exactly at the minimum and batch 64 at the
+  // maximum. Using log2(1 + batch) put batch 1 a sixth of the way up the
+  // range, so the documented lower bound was never actually reached.
+  const span = Math.min(1, Math.max(0, Math.log2(batchSize) / Math.log2(64)));
+  return min + (max - min) * span;
 }
 
 export function computeEnergy(
@@ -132,7 +170,9 @@ export function computeEnergy(
   } else {
     const dynamicW = Math.max(0, gpu.tdpW - gpu.idleW);
     decodePowerW =
-      (idleW + dynamicW * decodeTdpFraction(workload.batchSize)) * numGpus;
+      (idleW +
+        dynamicW * decodeTdpFraction(workload.batchSize, gpu.segment ?? 'consumer')) *
+      numGpus;
     prefillPowerW = (idleW + dynamicW * PREFILL_TDP_FRACTION) * numGpus;
   }
 
@@ -183,6 +223,10 @@ export function computeEnergy(
   const wallJoulesPerToken = tokensPerSec > 0 ? wallPowerW / tokensPerSec : 0;
 
   const kWhPerMTokens = (wallJoulesPerToken * 1e6) / 3.6e6;
+  // 1 Wh = 3600 J. Note this is numerically identical to kWhPerMTokens — both
+  // reduce to J/token / 3.6 — so the UI shows only one of them. Watt-hours per
+  // thousand tokens is the readable scale; per single token would be ~0.002 Wh.
+  const wattHoursPerKTokens = (wallJoulesPerToken * 1000) / 3600;
 
   return {
     decodePowerW,
@@ -190,6 +234,7 @@ export function computeEnergy(
     joulesPerToken,
     wallJoulesPerToken,
     kWhPerMTokens,
+    wattHoursPerKTokens,
     wallPowerW,
     decomposition,
     epsFlopPJ,

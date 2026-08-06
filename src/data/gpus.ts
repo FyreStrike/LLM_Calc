@@ -1,4 +1,4 @@
-﻿import type { GpuSpec } from '../core/types';
+﻿import type { GpuSegment, GpuSpec } from '../core/types';
 
 /**
  * Hardware reference database.
@@ -442,6 +442,33 @@ export const GPUS: GpuSpec[] = [
     note: 'gpu.note.unverified',
   },
 ];
+
+/**
+ * Market segment per GPU, kept in one place rather than repeated on every
+ * entry. This drives decode power: measured draw as a fraction of TDP differs
+ * sharply between a consumer card and a datacenter part, because the memory
+ * subsystem costs roughly the same absolute power in both while the thermal
+ * rating does not.
+ */
+const DATACENTER = new Set([
+  'a100-40gb-sxm', 'a100-80gb-sxm', 'a100-80gb-pcie', 'h100-sxm', 'h100-pcie',
+  'h200-sxm', 'b200-sxm', 'b300-sxm', 'l40s', 'mi300x', 'mi325x', 'mi355x',
+]);
+const WORKSTATION = new Set([
+  'rtx-a6000', 'rtx-6000-ada', 'rtx-pro-6000-blackwell', 'arc-pro-b60',
+]);
+
+function inferSegment(gpu: GpuSpec): GpuSegment {
+  if (gpu.soc) return 'soc';
+  if (DATACENTER.has(gpu.id)) return 'datacenter';
+  if (WORKSTATION.has(gpu.id)) return 'workstation';
+  return 'consumer';
+}
+
+// Applied once at module load so every consumer sees a populated field.
+for (const gpu of GPUS) {
+  gpu.segment ??= inferSegment(gpu);
+}
 
 export function getGpu(id: string): GpuSpec | undefined {
   return GPUS.find((g) => g.id === id);
