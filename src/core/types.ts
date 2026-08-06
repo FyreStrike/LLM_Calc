@@ -435,8 +435,17 @@ export interface PerformanceResult {
 }
 
 export interface EnergyResult {
-  /** Average GPU-only power during decode. */
+  /**
+   * Mean GPU-only power over the decode phase, P̄_decode.
+   *
+   * A mean, not an instantaneous figure: real draw swings substantially
+   * between and within tokens as layers alternate between memory transfer and
+   * compute. Capturing peaks requires high-rate sampling — the thesis design
+   * uses 10 Hz NVML polling and notes that transients under 5 ms need external
+   * sensors entirely.
+   */
   decodePowerW: number;
+  /** Mean GPU-only power over the prefill phase, P̄_prefill. */
   prefillPowerW: number;
   /** GPU energy per generated token. */
   joulesPerToken: number;
@@ -451,7 +460,7 @@ export interface EnergyResult {
    * unreadably small (~0.002 Wh), so the practical scale is per thousand.
    */
   wattHoursPerKTokens: number;
-  /** Sustained wall-plug draw while generating. */
+  /** Mean wall-plug draw while generating, P̄_wall. */
   wallPowerW: number;
   /** Roofline decomposition — populated in roofline mode. */
   decomposition?: {
@@ -466,7 +475,10 @@ export interface EnergyResult {
    * is visible rather than buried in a single overhead figure.
    */
   host: {
-    /** CPU, board, drives. Load-independent. */
+    /**
+     * CPU, board, drives. Steady-state constants rather than means — these do
+     * not vary with the phase the way the GPU figures do.
+     */
     baseW: number;
     /** Paid for every installed module whether or not it is used. */
     ramIdleW: number;

@@ -95,6 +95,19 @@ describe('segment bands', () => {
     }
   });
 
+  it('distinguishes the H200 PCIe part from the SXM one', () => {
+    const sxm = getGpu('h200-sxm')!;
+    const nvl = getGpu('h200-nvl')!;
+
+    // Same memory subsystem...
+    expect(nvl.vramGb).toBe(sxm.vramGb);
+    expect(nvl.bandwidthGBs).toBe(sxm.bandwidthGBs);
+    // ...but a tighter power envelope and lower clocks.
+    expect(nvl.tdpW).toBeLessThan(sxm.tdpW);
+    expect(nvl.fp16TFlops).toBeLessThan(sxm.fp16TFlops);
+    expect(nvl.segment).toBe('datacenter');
+  });
+
   it('classifies the catalog into segments', () => {
     expect(getGpu('rtx-4090')!.segment).toBe('consumer');
     expect(getGpu('h100-sxm')!.segment).toBe('datacenter');

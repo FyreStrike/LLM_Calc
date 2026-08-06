@@ -99,6 +99,7 @@ export const en = {
       blackwellEstimate: 'Consumer Blackwell throughput figures are not fully verified.',
       proBlackwellEstimate: 'FP16 throughput extrapolated from SM count; not verified.',
       b200Capacity: 'Sources disagree between 180 GB / 7.7 TB/s and 192 GB / 8.0 TB/s.',
+      h200nvl: 'PCIe form factor with an NVLink bridge: same memory as the SXM part, but lower compute and 600 W instead of 700 W (configurable down to 450 W).',
       gb10: 'LPDDR5x unified memory: huge capacity at only 273 GB/s. An SoC — the 140 W covers CPU and GPU together.',
       m3ProRegression: 'Bandwidth regressed from the M2 Pro (200 GB/s) to 150 GB/s.',
       appleBinning: 'Bandwidth depends on the GPU core count of the specific bin.',
@@ -231,9 +232,11 @@ export const en = {
     ofTdp: 'of TDP',
     belowTdpNote:
       'Well under the {{tdp}} W TDP ({{percent}} %), because decode is memory-bandwidth-bound: arithmetic intensity {{intensity}} against a ridge point of {{ridge}} FLOP/byte. The compute units sit largely idle — TDP is a thermal ceiling for sustained tensor-core load, not a draw figure for generating tokens.',
-    powerDraw: 'Power draw',
+    powerDraw: 'Mean power draw',
     joulesPerToken: 'Energy per token',
-    wallPower: 'Wall-plug power',
+    wallPower: 'Mean at the wall',
+    meanNote:
+      'All power figures are means over the respective phase. Actual draw swings considerably from token to token and layer to layer; peaks need a high-rate measurement.',
   },
 
   cost: {

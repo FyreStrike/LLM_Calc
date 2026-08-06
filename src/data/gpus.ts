@@ -276,6 +276,24 @@ export const GPUS: GpuSpec[] = [
     nvlink: true,
   },
   {
+    id: 'h200-nvl',
+    name: 'H200 NVL (PCIe)',
+    vendor: 'nvidia',
+    architecture: 'Hopper (SM 9.0)',
+    vramGb: 141,
+    bandwidthGBs: 4800,
+    // Same memory as the SXM part, but lower clocks in the PCIe envelope:
+    // 1,671 TFLOPS FP16 and 3,341 FP8 with sparsity, so half those dense.
+    fp16TFlops: 835,
+    fp8TFlops: 1671,
+    // Configurable 450-600 W; the ceiling is used here.
+    tdpW: 600,
+    idleW: 65,
+    // NVLink bridge on the card, 2-way or 4-way at 900 GB/s per GPU.
+    nvlink: true,
+    note: 'gpu.note.h200nvl',
+  },
+  {
     id: 'b200-sxm',
     name: 'B200 SXM',
     vendor: 'nvidia',
@@ -452,7 +470,8 @@ export const GPUS: GpuSpec[] = [
  */
 const DATACENTER = new Set([
   'a100-40gb-sxm', 'a100-80gb-sxm', 'a100-80gb-pcie', 'h100-sxm', 'h100-pcie',
-  'h200-sxm', 'b200-sxm', 'b300-sxm', 'l40s', 'mi300x', 'mi325x', 'mi355x',
+  'h200-sxm', 'h200-nvl', 'b200-sxm', 'b300-sxm', 'l40s', 'mi300x', 'mi325x',
+  'mi355x',
 ]);
 const WORKSTATION = new Set([
   'rtx-a6000', 'rtx-6000-ada', 'rtx-pro-6000-blackwell', 'arc-pro-b60',

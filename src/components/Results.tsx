@@ -403,14 +403,16 @@ function EnergyCard({ result }: { result: CalcResult }) {
   return (
     <Card title={t('section.energy')}>
       <div className="grid grid-cols-3 gap-4">
+        {/* Ø marks these as means over the phase, not instantaneous draw —
+            unlike the host figures below, which are steady-state constants. */}
         <Stat
-          label={`GPU · ${t('results.decode')}`}
+          label={`Ø GPU · ${t('results.decode')}`}
           value={num(energy.decodePowerW, language, 0)}
           unit="W"
           sub={`${num(decodePctTdp, language, 0)} % ${t('energy.ofTdp')}`}
         />
         <Stat
-          label={`GPU · ${t('results.prefill')}`}
+          label={`Ø GPU · ${t('results.prefill')}`}
           value={num(energy.prefillPowerW, language, 0)}
           unit="W"
           sub={`${num((energy.prefillPowerW / totalTdpW) * 100, language, 0)} % ${t('energy.ofTdp')}`}
@@ -422,11 +424,15 @@ function EnergyCard({ result }: { result: CalcResult }) {
         />
       </div>
 
+      <p className="mt-3 text-[11px] leading-relaxed text-[var(--text-3)]">
+        {t('energy.meanNote')}
+      </p>
+
       {/* Answers the obvious objection — four 360 W cards ought to draw
           1440 W. TDP is a thermal ceiling for sustained tensor-core load;
           memory-bound decode leaves those units idle. */}
       {result.performance.decodeBound === 'memory' && (
-        <p className="mt-3 text-[11px] leading-relaxed text-[var(--text-3)]">
+        <p className="mt-2 text-[11px] leading-relaxed text-[var(--text-3)]">
           {t('energy.belowTdpNote', {
             tdp: num(totalTdpW, language, 0),
             percent: num(decodePctTdp, language, 0),

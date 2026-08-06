@@ -101,6 +101,7 @@ export const de: Translations = {
       blackwellEstimate: 'Durchsatzwerte für Consumer-Blackwell sind nicht vollständig verifiziert.',
       proBlackwellEstimate: 'FP16-Durchsatz aus der SM-Anzahl extrapoliert; nicht verifiziert.',
       b200Capacity: 'Quellen widersprechen sich: 180 GB / 7,7 TB/s gegenüber 192 GB / 8,0 TB/s.',
+      h200nvl: 'PCIe-Variante mit NVLink-Brücke: gleicher Speicher wie SXM, aber geringere Rechenleistung und 600 W statt 700 W (auf 450 W konfigurierbar).',
       gb10: 'LPDDR5x Unified Memory: sehr große Kapazität bei nur 273 GB/s. SoC — die 140 W decken CPU und GPU gemeinsam ab.',
       m3ProRegression: 'Bandbreite gegenüber dem M2 Pro (200 GB/s) auf 150 GB/s gesunken.',
       appleBinning: 'Die Bandbreite hängt von der GPU-Kernanzahl des jeweiligen Bins ab.',
@@ -233,9 +234,11 @@ export const de: Translations = {
     ofTdp: 'der TDP',
     belowTdpNote:
       'Deutlich unter der TDP von {{tdp}} W ({{percent}} %), weil Decode speicherbandbreitenlimitiert ist: arithmetische Intensität {{intensity}} gegenüber einem Ridge Point von {{ridge}} FLOP/Byte. Die Rechenwerke liegen dabei weitgehend brach — TDP ist eine thermische Obergrenze für dauerhafte Tensor-Core-Last, kein Verbrauchswert beim Token-Generieren.',
-    powerDraw: 'Leistungsaufnahme',
+    powerDraw: 'Ø Leistungsaufnahme',
     joulesPerToken: 'Energie pro Token',
-    wallPower: 'Leistung an der Steckdose',
+    wallPower: 'Ø an der Steckdose',
+    meanNote:
+      'Alle Leistungswerte sind Mittelwerte über die jeweilige Phase. Die tatsächliche Aufnahme schwankt pro Token und pro Layer erheblich; für Spitzenwerte ist eine Messung mit hoher Abtastrate nötig.',
   },
 
   cost: {

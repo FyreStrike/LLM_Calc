@@ -272,10 +272,50 @@ Der ML.ENERGY-Benchmark misst LLM-Decoding bei etwa **20–40 % der TDP**, da di
 geringe Rechenintensität große Teile der Recheneinheiten ungenutzt lässt; Prefill
 nähert sich der TDP. ([Quelle](https://arxiv.org/html/2505.06371v1))
 
-$$P_{\text{decode}} = \pi_0 + (\text{TDP} - \pi_0) \cdot u(B_{\text{batch}}), \qquad u \in [0{,}20; 0{,}55]$$
+$$\bar{P}_{\text{decode}} = \pi_0 + (\text{TDP} - \pi_0) \cdot u(B_{\text{batch}}, s)$$
 
-$u$ interpoliert logarithmisch mit der Batch-Größe und sättigt um Batch 64.
-Prefill verwendet $u = 0{,}85$.
+**Alle Leistungsangaben des Rechners sind Mittelwerte** über die jeweilige
+Phase — daher der Querstrich. Die reale Aufnahme schwankt zwischen und
+innerhalb einzelner Token erheblich, da die Layer zwischen Speichertransfer und
+Rechnung wechseln. Für Spitzenwerte reicht die im Forschungsdesign vorgesehene
+10-Hz-NVML-Abtastung nicht; Transienten unter 5 ms erfordern externe Sensorik.
+Die Host-Posten (Board, RAM-Leerlauf, Laufwerke) sind dagegen
+Konstanten, keine Mittelwerte.
+
+$u$ interpoliert logarithmisch mit der Batch-Größe, $u = \log_2 B / \log_2 64$,
+und sättigt bei Batch 64. Der Wertebereich hängt vom **Marktsegment** $s$ ab:
+
+| Segment | $u$ bei Batch 1 | $u$ bei Batch ≥ 64 |
+| --- | --- | --- |
+| Consumer | 0,55 | 0,92 |
+| Workstation | 0,45 | 0,90 |
+| Rechenzentrum | 0,30 | 0,95 |
+| SoC | 0,40 | 0,85 |
+
+> **Warum segmentabhängig.** Die ML.ENERGY-Werte von 20–40 % wurden auf H100
+> und B200 gemessen. Sie auf Consumer-Karten zu übertragen unterschätzt diese
+> um Faktor zwei bis drei: Eine RTX 4090 zieht real 250–320 W beim Generieren,
+> ein 20-%-Anteil sagt 110 W voraus. Grund ist, dass die Decode-Leistung vom
+> Speichersystem dominiert wird, dessen Verbrauch **absolut** ist und nicht mit
+> der Wärmeklasse skaliert — GDDR6X zu sättigen kostet auf einer 450-W-Karte
+> ungefähr dasselbe wie auf einer 700-W-Karte.
+>
+> Die Segmente unterscheiden sich dabei vor allem am **unteren** Ende. Ein
+> ausgelasteter Produktionsknoten mit Continuous Batching treibt eine H100
+> tatsächlich auf 600–700 W, sodass alle Segmente bei großem Batch gegen ihre
+> Nennleistung konvergieren.
+
+Prefill verwendet $u = 0{,}95$ — die Phase ist rechenleistungsgebunden und
+sättigt die Tensor Cores.
+
+**Verifizierte Ankerpunkte** (`power.test.ts`):
+
+| Konfiguration | Modell | Messung |
+| --- | --- | --- |
+| RTX 4090, Batch 1 | 257 W | 250–320 W |
+| RTX 4090, Batch 256 | 416 W | 360–410 W |
+| H100 SXM, Batch 1 | 263 W (38 %) | ML.ENERGY 20–40 % |
+| H100 SXM, Batch 256 | 669 W (96 %) | Produktionsbeobachtung |
 
 ### 4.2 Energie pro Token
 
